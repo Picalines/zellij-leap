@@ -1,0 +1,36 @@
+[settings]
+experimental = true
+
+[tools]
+rust = "1.95.0"
+watchexec = "latest"
+
+[env]
+PROJECT_NAME = "{{ config_root | basename }}"
+CARGO_BUILD_TARGET = "wasm32-wasip1"
+TARGET_DIR = "{{ config_root }}/target/{{ env.CARGO_BUILD_TARGET }}"
+DEBUG_WASM = "{{ env.TARGET_DIR }}/debug/{{ env.PROJECT_NAME }}.wasm"
+RELEASE_WASM = "{{ env.TARGET_DIR }}/release/{{ env.PROJECT_NAME }}.wasm"
+
+[hooks]
+postinstall = "rustup target add {{ env.CARGO_BUILD_TARGET }}"
+
+[tasks."build:release"]
+run = "cargo build --release"
+
+[tasks.build]
+alias = "b"
+run = "cargo build"
+
+[tasks.lint]
+alias = "l"
+run = "cargo clippy"
+
+[tasks.fix]
+alias = "f"
+run = "cargo clippy --allow-dirty --fix"
+
+[tasks.run]
+alias = "r"
+depends = "build"
+run = "zellij action start-or-reload-plugin file:{{ env.DEBUG_WASM }}"

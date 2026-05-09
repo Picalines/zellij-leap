@@ -1,0 +1,41 @@
+name: Create Release Draft
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install mise
+        uses: jdx/mise-action@v4
+
+      - name: Prepare rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: mise run build:release
+
+      - name: Get package metadata
+        id: metadata
+        uses: nicolaiunrein/cargo-get@master
+
+      - name: Create Release
+        uses: ncipollo/release-action@v1.21.0
+        with:
+          allowUpdates: true
+          commit: main
+          tag: v${{ steps.metadata.outputs.package_version }}
+          omitBodyDuringUpdate: true
+          artifacts: ${{ env.RELEASE_WASM }}
+          draft: true
+          prerelease: false
+          generateReleaseNotes: true

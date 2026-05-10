@@ -9,7 +9,7 @@ use crate::leap_config::LeapConfig;
 use crate::matched_string::MatchedString;
 
 struct LeapTarget {
-    tab_id: usize,
+    tab_position: usize,
     name: MatchedString,
     being_matched: bool,
     current: bool,
@@ -133,7 +133,7 @@ impl LeapState {
         self.targets = tabs
             .iter()
             .map(|tab| LeapTarget {
-                tab_id: tab.tab_id,
+                tab_position: tab.position,
                 name: MatchedString::new(tab.name.clone()),
                 being_matched: !tab.active || self.config.include_current_target,
                 current: tab.active,
@@ -172,7 +172,7 @@ impl LeapState {
 
             if target.name.match_char(ch) {
                 number_of_matches += 1;
-                last_matched_tab_id = Some(target.tab_id);
+                last_matched_tab_id = Some(target.tab_position);
             } else {
                 target.being_matched = false;
             }
@@ -186,8 +186,8 @@ impl LeapState {
                 // - reset and display message
                 close_self();
             }
-            (1, Some(tab_id)) => {
-                switch_tab_to(tab_id as u32 + 1);
+            (1, Some(tab_position)) => {
+                switch_tab_to(tab_position as u32 + 1);
                 _ = hide_floating_panes(None);
                 close_self();
             }

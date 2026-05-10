@@ -130,6 +130,8 @@ impl LeapState {
             return false;
         }
 
+        self.input.clear();
+
         self.targets = tabs
             .iter()
             .map(|tab| LeapTarget {

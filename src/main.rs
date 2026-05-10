@@ -5,7 +5,7 @@ use owo_colors::OwoColorize;
 use std::collections::BTreeMap;
 use zellij_tile::prelude::*;
 
-use crate::leap_config::LeapConfig;
+use crate::leap_config::{EscapeBehavior, LeapConfig};
 use crate::matched_string::MatchedString;
 
 struct LeapTarget {
@@ -208,8 +208,11 @@ impl LeapState {
             return true;
         }
 
-        // TODO: add configuration that also hides floating panes
-        close_self();
+        match self.config.escape_behavior {
+            EscapeBehavior::Close => close_self(),
+            EscapeBehavior::HideFloatingPanes => _ = hide_floating_panes(None),
+        }
+
         false
     }
 

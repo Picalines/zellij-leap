@@ -1,8 +1,10 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, str::FromStr};
+use strum::EnumString;
 
 pub struct LeapConfig {
     pub include_current_target: bool,
     pub close_on_pane_unfocus: bool,
+    pub escape_behavior: EscapeBehavior,
 }
 
 impl Default for LeapConfig {
@@ -10,8 +12,16 @@ impl Default for LeapConfig {
         Self {
             include_current_target: true,
             close_on_pane_unfocus: true,
+            escape_behavior: EscapeBehavior::Close,
         }
     }
+}
+
+#[derive(EnumString)]
+#[strum(serialize_all = "snake_case")]
+pub enum EscapeBehavior {
+    Close,
+    HideFloatingPanes,
 }
 
 impl LeapConfig {
@@ -30,6 +40,11 @@ impl LeapConfig {
                 "leap_close_on_pane_unfocus",
                 default.close_on_pane_unfocus,
             ),
+            escape_behavior: Self::parse_str_enum(
+                &configuration,
+                "leap_on_escape",
+                default.escape_behavior,
+            ),
         }
     }
 
@@ -45,5 +60,17 @@ impl LeapConfig {
         } else {
             default
         }
+    }
+
+    fn parse_str_enum<E: FromStr>(
+        configuration: &BTreeMap<String, String>,
+        key: &str,
+        default: E,
+    ) -> E {
+        let Some(config_value) = configuration.get(key) else {
+            return default;
+        };
+
+        E::from_str(config_value).unwrap_or(default)
     }
 }

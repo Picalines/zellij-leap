@@ -20,7 +20,7 @@ impl LeapConfig {
         Self {
             include_current_target: Self::parse_bool_pair(
                 &configuration,
-                "include_current_target",
+                "leap_include_current_target",
                 default.include_current_target,
             ),
         }

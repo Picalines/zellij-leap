@@ -37,12 +37,7 @@ impl ZellijPlugin for LeapState {
             PermissionType::ChangeApplicationState,
         ]);
 
-        subscribe(&[
-            EventType::Key,
-            EventType::PaneUpdate,
-            EventType::TabUpdate,
-            EventType::Visible,
-        ]);
+        subscribe(&[EventType::Key, EventType::PaneUpdate, EventType::TabUpdate]);
 
         rename_plugin_pane(get_plugin_ids().plugin_id, "leap");
     }
@@ -55,10 +50,6 @@ impl ZellijPlugin for LeapState {
                 false
             }
             Event::TabUpdate(tabs) => self.handle_tab_update(tabs),
-            Event::Visible(true) => {
-                self.reset_input();
-                true
-            }
             _ => false,
         }
     }

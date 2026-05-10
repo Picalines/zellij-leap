@@ -2,12 +2,14 @@ use std::collections::BTreeMap;
 
 pub struct LeapConfig {
     pub include_current_target: bool,
+    pub close_on_pane_unfocus: bool,
 }
 
 impl Default for LeapConfig {
     fn default() -> Self {
         Self {
             include_current_target: true,
+            close_on_pane_unfocus: true,
         }
     }
 }
@@ -22,6 +24,11 @@ impl LeapConfig {
                 &configuration,
                 "leap_include_current_target",
                 default.include_current_target,
+            ),
+            close_on_pane_unfocus: Self::parse_bool_pair(
+                &configuration,
+                "leap_close_on_pane_unfocus",
+                default.close_on_pane_unfocus,
             ),
         }
     }

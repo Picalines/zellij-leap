@@ -20,6 +20,7 @@ struct LeapState {
     config: LeapConfig,
     targets: Vec<LeapTarget>,
     input: String,
+    is_pane_focused: bool,
 }
 
 register_plugin!(LeapState);
@@ -36,7 +37,12 @@ impl ZellijPlugin for LeapState {
             PermissionType::ChangeApplicationState,
         ]);
 
-        subscribe(&[EventType::Key, EventType::TabUpdate, EventType::Visible]);
+        subscribe(&[
+            EventType::Key,
+            EventType::PaneUpdate,
+            EventType::TabUpdate,
+            EventType::Visible,
+        ]);
 
         rename_plugin_pane(get_plugin_ids().plugin_id, "leap");
     }
@@ -44,6 +50,10 @@ impl ZellijPlugin for LeapState {
     fn update(&mut self, event: Event) -> bool {
         match event {
             Event::Key(key) => self.handle_key(key),
+            Event::PaneUpdate(_) => {
+                self.handle_pane_update();
+                false
+            }
             Event::TabUpdate(tabs) => self.handle_tab_update(tabs),
             Event::Visible(true) => {
                 self.reset_input();
@@ -54,7 +64,7 @@ impl ZellijPlugin for LeapState {
     }
 
     fn render(&mut self, rows: usize, cols: usize) {
-        let hint_text = "jump to tab:";
+        let hint_text = "leap to tab:";
 
         // I wanted this code to not allocate, so beware:
         // we calculate size of UI before rendering it
@@ -123,13 +133,6 @@ impl LeapState {
     }
 
     fn handle_tab_update(&mut self, tabs: Vec<TabInfo>) -> bool {
-        if let Some(active_tab) = tabs.iter().find(|tab| tab.active)
-            && !active_tab.are_floating_panes_visible
-        {
-            close_self();
-            return false;
-        }
-
         self.input.clear();
 
         self.targets = tabs
@@ -208,5 +211,20 @@ impl LeapState {
         // TODO: add configuration that also hides floating panes
         close_self();
         false
+    }
+
+    fn handle_pane_update(&mut self) {
+        let Ok((_, focused_pane_id)) = get_focused_pane_info() else {
+            return;
+        };
+
+        let plugin_id = get_plugin_ids().plugin_id;
+        let is_focused = focused_pane_id == PaneId::Plugin(plugin_id);
+
+        if self.is_pane_focused && !is_focused && self.config.close_on_pane_unfocus {
+            close_self();
+        }
+
+        self.is_pane_focused = is_focused
     }
 }

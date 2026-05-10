@@ -4,22 +4,43 @@ Jump to a Zellij tab by typing a few characters of its title
 
 Inspired by [leap.nvim](https://codeberg.org/andyg/leap.nvim) and its predecessors
 
-> [!TODO]
-> Proper README structure
-
 ![demo](./assets/demo.cast.gif)
 
-## Zellij config
+## Installation
+
+1. Download the latest `zellij-leap.wasm` from the releases page
+2. Add it to your Zellij plugin aliases
+
+```kdl
+plugins {
+    about location="zellij:about"
+    session-manager location="zellij:session-manager"
+    // ...
+    leap location="file:/absolute/path/to/zellij-leap.wasm"
+}
+```
+
+## Configuration
 
 ```kdl
 keybinds {
     normal {
         bind "Space" {
-            LaunchOrFocusPlugin "file:/absolute/path/to/zellij-leap.wasm" {
+            LaunchOrFocusPlugin "leap" {
                 floating true
                 move_to_focused_tab true
+                leap_include_current_target true // False to exclude current tab from matching
+                leap_on_pane_unfocus "none"      // Behavior when pane loses focus: "none" or "close"
+                leap_on_escape "close"           // Behavior on escape key: "close" or "hide_floating_panes"
             }
         }
     }
 }
 ```
+
+## Matching algorithm
+
+1. Search each tab name for the first occurrence of the typed character (case-insensitive)
+2. Filter out tabs that don't contain the character
+3. For subsequent characters, search only the portion of the name after the previous match
+4. Automatically jump to the tab when only one match remains

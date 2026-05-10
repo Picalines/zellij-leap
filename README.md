@@ -7,6 +7,8 @@ Inspired by [leap.nvim](https://codeberg.org/andyg/leap.nvim) and its predecesso
 > [!TODO]
 > Proper README structure
 
+![demo](./assets/demo.cast.gif)
+
 ## Zellij config
 
 ```kdl

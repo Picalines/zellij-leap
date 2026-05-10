@@ -3,7 +3,6 @@ experimental = true
 
 [tools]
 rust = "1.95.0"
-watchexec = "latest"
 
 [env]
 PROJECT_NAME = "{{ config_root | basename }}"
@@ -11,6 +10,8 @@ CARGO_BUILD_TARGET = "wasm32-wasip1"
 TARGET_DIR = "{{ config_root }}/target/{{ env.CARGO_BUILD_TARGET }}"
 DEBUG_WASM = "{{ env.TARGET_DIR }}/debug/{{ env.PROJECT_NAME }}.wasm"
 RELEASE_WASM = "{{ env.TARGET_DIR }}/release/{{ env.PROJECT_NAME }}.wasm"
+DEMO_CAST = "{{ config_root }}/assets/demo.cast"
+DEMO_GIF = "{{ env.DEMO_CAST }}.gif"
 
 [hooks]
 postinstall = "rustup target add {{ env.CARGO_BUILD_TARGET }}"
@@ -34,3 +35,18 @@ run = "cargo clippy --allow-dirty --fix"
 alias = "r"
 depends = "build"
 run = "zellij action start-or-reload-plugin file:{{ env.DEBUG_WASM }}"
+
+[tasks."demo:record"]
+tools = { "aqua:asciinema/asciinema" = "latest" }
+run = "asciinema record {{ env.DEMO_CAST }} -I --overwrite --title '{{ env.PROJECT_NAME }} demo'"
+
+[tasks."demo:astroterm"]
+run = "astroterm -c -s 200 -C -f 60"
+
+[tasks."demo:to-gif"]
+tools = { "aqua:asciinema/agg" = "latest" }
+run = "agg {{ env.DEMO_CAST }} {{ env.DEMO_GIF }}"
+
+[tasks."demo:play"]
+tools = { "aqua:asciinema/asciinema" = "latest" }
+run = "asciinema play {{ env.DEMO_CAST }}"

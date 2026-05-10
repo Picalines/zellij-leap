@@ -1,18 +1,23 @@
+mod leap_config;
 mod matched_string;
 
-use matched_string::MatchedString;
 use owo_colors::OwoColorize;
 use std::collections::BTreeMap;
 use zellij_tile::prelude::*;
+
+use crate::leap_config::LeapConfig;
+use crate::matched_string::MatchedString;
 
 struct LeapTarget {
     tab_id: usize,
     name: MatchedString,
     being_matched: bool,
+    current: bool,
 }
 
 #[derive(Default)]
 struct LeapState {
+    config: LeapConfig,
     targets: Vec<LeapTarget>,
     input: String,
 }
@@ -20,11 +25,12 @@ struct LeapState {
 register_plugin!(LeapState);
 
 // TODO: support for jumping to panes
-// TODO: add option to skip current tab
 // TODO: handle exact matches or tabs with same names
 
 impl ZellijPlugin for LeapState {
-    fn load(&mut self, _configuration: BTreeMap<String, String>) {
+    fn load(&mut self, configuration: BTreeMap<String, String>) {
+        self.config = LeapConfig::parse(configuration);
+
         request_permission(&[
             PermissionType::ReadApplicationState,
             PermissionType::ChangeApplicationState,
@@ -49,23 +55,44 @@ impl ZellijPlugin for LeapState {
 
     fn render(&mut self, rows: usize, cols: usize) {
         let hint_text = "jump to tab:";
-        let mut lines = vec![hint_text.italic().dimmed().to_string()];
-        let mut width = hint_text.len();
+
+        // I wanted this code to not allocate, so beware:
+        // we calculate size of UI before rendering it
+        let target_prefix_width = 2;
+        let width = hint_text.len().max(
+            self.targets
+                .iter()
+                .map(|target| target_prefix_width + target.name.str().chars().count())
+                .max()
+                .unwrap_or(0),
+        );
+        let left_padding = cols.saturating_sub(width).saturating_div(2);
+
+        let height = self.targets.len() + 1; // 1 for hint
+        let top_padding = rows.saturating_sub(height).saturating_div(2);
+        print!("{:\n<1$}", "", top_padding);
+
+        print!("{: <1$}", "", left_padding);
+        println!("{}", hint_text.dimmed());
 
         for target in self.targets.iter() {
-            width = width.max(target.name.str().chars().count());
+            print!("{: <1$}", "", left_padding);
+
+            let prefix = if target.current { "> " } else { "  " };
+            debug_assert_eq!(prefix.len(), target_prefix_width);
+            print!("{}", prefix.green());
 
             if !target.being_matched {
-                lines.push(format!("{}", target.name.str().dimmed().strikethrough()));
+                println!("{}", target.name.str().dimmed().strikethrough());
                 continue;
             }
 
             let (before_match, matched, after_match) = target.name.split();
 
-            lines.push(if matched.is_empty() {
-                target.name.str().to_string()
+            if matched.is_empty() {
+                println!("{}", target.name.str());
             } else if after_match.is_empty() {
-                format!(
+                println!(
                     "{}{}{}",
                     before_match.dimmed(),
                     matched.bold().dimmed(),
@@ -73,22 +100,14 @@ impl ZellijPlugin for LeapState {
                 )
             } else {
                 let (next_input, after_next) = after_match.split_at(1);
-                format!(
+                println!(
                     "{}{}{}{}",
                     before_match.dimmed(),
                     matched.bold().dimmed(),
                     next_input.underline().green(),
                     after_next.dimmed()
                 )
-            });
-        }
-
-        let top_padding = rows.saturating_sub(lines.len()).saturating_div(2);
-        let left_padding = cols.saturating_sub(width).saturating_div(2);
-
-        print!("{:\n<1$}", "", top_padding);
-        for line in lines {
-            println!("{: <1$}{line}", "", left_padding);
+            }
         }
     }
 }
@@ -116,7 +135,8 @@ impl LeapState {
             .map(|tab| LeapTarget {
                 tab_id: tab.tab_id,
                 name: MatchedString::new(tab.name.clone()),
-                being_matched: true,
+                being_matched: !tab.active || self.config.include_current_target,
+                current: tab.active,
             })
             .collect();
 

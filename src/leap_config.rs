@@ -3,7 +3,7 @@ use strum::EnumString;
 
 pub struct LeapConfig {
     pub include_current_target: bool,
-    pub close_on_pane_unfocus: bool,
+    pub pane_unfocus_behaviour: PaneUnfocusBehaviour,
     pub escape_behavior: EscapeBehavior,
 }
 
@@ -11,10 +11,17 @@ impl Default for LeapConfig {
     fn default() -> Self {
         Self {
             include_current_target: true,
-            close_on_pane_unfocus: true,
+            pane_unfocus_behaviour: PaneUnfocusBehaviour::None,
             escape_behavior: EscapeBehavior::Close,
         }
     }
+}
+
+#[derive(EnumString)]
+#[strum(serialize_all = "snake_case")]
+pub enum PaneUnfocusBehaviour {
+    None,
+    Close,
 }
 
 #[derive(EnumString)]
@@ -35,10 +42,10 @@ impl LeapConfig {
                 "leap_include_current_target",
                 default.include_current_target,
             ),
-            close_on_pane_unfocus: Self::parse_bool_pair(
+            pane_unfocus_behaviour: Self::parse_str_enum(
                 &configuration,
-                "leap_close_on_pane_unfocus",
-                default.close_on_pane_unfocus,
+                "leap_on_pane_unfocus",
+                default.pane_unfocus_behaviour,
             ),
             escape_behavior: Self::parse_str_enum(
                 &configuration,

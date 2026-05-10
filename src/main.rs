@@ -5,7 +5,7 @@ use owo_colors::OwoColorize;
 use std::collections::BTreeMap;
 use zellij_tile::prelude::*;
 
-use crate::leap_config::{EscapeBehavior, LeapConfig};
+use crate::leap_config::{EscapeBehavior, LeapConfig, PaneUnfocusBehaviour};
 use crate::matched_string::MatchedString;
 
 struct LeapTarget {
@@ -224,8 +224,11 @@ impl LeapState {
         let plugin_id = get_plugin_ids().plugin_id;
         let is_focused = focused_pane_id == PaneId::Plugin(plugin_id);
 
-        if self.is_pane_focused && !is_focused && self.config.close_on_pane_unfocus {
-            close_self();
+        if self.is_pane_focused && !is_focused {
+            match self.config.pane_unfocus_behaviour {
+                PaneUnfocusBehaviour::None => (),
+                PaneUnfocusBehaviour::Close => close_self(),
+            }
         }
 
         self.is_pane_focused = is_focused

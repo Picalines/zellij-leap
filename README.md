@@ -33,6 +33,7 @@ keybinds {
                 leap_on_pane_unfocus "none"      // Behavior when pane loses focus: "none" or "close"
                 leap_on_escape "close"           // Behavior on escape key: "close" or "hide_floating_panes"
             }
+            SwitchToMode "normal";
         }
     }
 }

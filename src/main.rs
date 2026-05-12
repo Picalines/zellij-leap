@@ -1,18 +1,25 @@
 mod leap_config;
 mod matched_string;
+mod utils;
 
 use owo_colors::OwoColorize;
 use std::collections::BTreeMap;
 use zellij_tile::prelude::*;
 
-use crate::leap_config::{EscapeBehavior, LeapConfig, PaneUnfocusBehaviour};
+use crate::leap_config::*;
 use crate::matched_string::MatchedString;
+use crate::utils::*;
+
+enum LeapLocation {
+    Tab(TabIndex),
+    Pane(PaneId),
+}
 
 struct LeapTarget {
-    tab_position: usize,
     name: MatchedString,
     being_matched: bool,
     current: bool,
+    location: LeapLocation,
 }
 
 #[derive(Default)]
@@ -25,7 +32,6 @@ struct LeapState {
 
 register_plugin!(LeapState);
 
-// TODO: support for jumping to panes
 // TODO: handle exact matches or tabs with same names
 
 impl ZellijPlugin for LeapState {
@@ -45,17 +51,17 @@ impl ZellijPlugin for LeapState {
     fn update(&mut self, event: Event) -> bool {
         match event {
             Event::Key(key) => self.handle_key(key),
-            Event::PaneUpdate(_) => {
-                self.handle_pane_update();
-                false
-            }
+            Event::PaneUpdate(panes) => self.handle_pane_update(panes),
             Event::TabUpdate(tabs) => self.handle_tab_update(tabs),
             _ => false,
         }
     }
 
     fn render(&mut self, rows: usize, cols: usize) {
-        let hint_text = "leap to tab:";
+        let hint_text = match self.config.target {
+            LeapTargetKind::Tab => "leap to tab:",
+            LeapTargetKind::PaneInActiveTab => "leap to pane:",
+        };
 
         // I wanted this code to not allocate, so beware:
         // we calculate size of UI before rendering it
@@ -114,25 +120,59 @@ impl ZellijPlugin for LeapState {
 }
 
 impl LeapState {
-    fn reset_input(&mut self) {
-        self.input.clear();
-
-        for target in self.targets.iter_mut() {
-            target.being_matched = true;
-            target.name.reset();
-        }
-    }
-
     fn handle_tab_update(&mut self, tabs: Vec<TabInfo>) -> bool {
+        if !matches!(self.config.target, LeapTargetKind::Tab) {
+            return false;
+        }
+
         self.input.clear();
 
         self.targets = tabs
             .iter()
             .map(|tab| LeapTarget {
-                tab_position: tab.position,
                 name: MatchedString::new(tab.name.clone()),
                 being_matched: !tab.active || self.config.include_current_target,
                 current: tab.active,
+                location: LeapLocation::Tab(TabIndex(tab.position)),
+            })
+            .collect();
+
+        true
+    }
+
+    fn handle_pane_update(&mut self, panes: PaneManifest) -> bool {
+        let Some((tab_index, _)) = self.handle_focus_state() else {
+            return false;
+        };
+
+        if !matches!(self.config.target, LeapTargetKind::PaneInActiveTab) {
+            return false;
+        }
+
+        let self_plugin_id = get_plugin_ids().plugin_id;
+
+        let Some(panes) = panes.panes.get(&tab_index.0) else {
+            return false;
+        };
+
+        self.input.clear();
+
+        self.targets = panes
+            .iter()
+            .filter_map(|pane| {
+                let is_self_plugin = pane.is_plugin && pane.id == self_plugin_id;
+
+                // TODO: config for suppressed panes?
+                if is_self_plugin || !pane.is_selectable || pane.is_suppressed {
+                    return None;
+                }
+
+                Some(LeapTarget {
+                    name: MatchedString::new(pane.title.clone()),
+                    being_matched: true,
+                    current: false,
+                    location: LeapLocation::Pane(pane_id_from_pane(pane)),
+                })
             })
             .collect();
 
@@ -159,7 +199,7 @@ impl LeapState {
 
     fn handle_char_key(&mut self, ch: char) {
         let mut number_of_matches = 0usize;
-        let mut last_matched_tab_id: Option<usize> = None;
+        let mut last_matched_location: Option<&LeapLocation> = None;
 
         for target in self.targets.iter_mut() {
             if !target.being_matched {
@@ -168,29 +208,35 @@ impl LeapState {
 
             if target.name.match_char(ch) {
                 number_of_matches += 1;
-                last_matched_tab_id = Some(target.tab_position);
+                last_matched_location = Some(&target.location);
             } else {
                 target.being_matched = false;
             }
         }
 
-        match (number_of_matches, last_matched_tab_id) {
-            (0, _) => {
-                // TODO: add option for "no matches" behavior
-                // - just close
-                // - hide floating panes
-                // - reset and display message
-                close_self();
-            }
-            (1, Some(tab_position)) => {
-                switch_tab_to(tab_position as u32 + 1);
-                _ = hide_floating_panes(None);
-                close_self();
-            }
-            _ => {
-                self.input.push(ch);
-            }
+        match (number_of_matches, last_matched_location) {
+            (0, _) => self.handle_no_matches(),
+            (1, Some(leap_location)) => Self::switch_to_location(&leap_location),
+            _ => self.input.push(ch),
+        };
+    }
+
+    fn switch_to_location(leap_location: &LeapLocation) {
+        _ = hide_floating_panes(None);
+        close_self();
+
+        match leap_location {
+            LeapLocation::Tab(tab_index) => switch_tab_to((*tab_index).0 as u32 + 1),
+            LeapLocation::Pane(pane_id) => focus_pane_with_id(*pane_id, false, false),
         }
+    }
+
+    fn handle_no_matches(&mut self) {
+        // TODO: add option for "no matches" behavior
+        // - just close
+        // - hide floating panes
+        // - reset and display message
+        close_self();
     }
 
     fn handle_escape(&mut self) -> bool {
@@ -207,10 +253,8 @@ impl LeapState {
         false
     }
 
-    fn handle_pane_update(&mut self) {
-        let Ok((_, focused_pane_id)) = get_focused_pane_info() else {
-            return;
-        };
+    fn handle_focus_state(&mut self) -> Option<(TabIndex, PaneId)> {
+        let (tab_index, focused_pane_id) = get_focused_pane_info().ok()?;
 
         let plugin_id = get_plugin_ids().plugin_id;
         let is_focused = focused_pane_id == PaneId::Plugin(plugin_id);
@@ -222,6 +266,17 @@ impl LeapState {
             }
         }
 
-        self.is_pane_focused = is_focused
+        self.is_pane_focused = is_focused;
+
+        Some((TabIndex(tab_index), focused_pane_id))
+    }
+
+    fn reset_input(&mut self) {
+        self.input.clear();
+
+        for target in self.targets.iter_mut() {
+            target.being_matched = true;
+            target.name.reset();
+        }
     }
 }

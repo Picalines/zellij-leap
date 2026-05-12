@@ -2,6 +2,7 @@ use std::{collections::BTreeMap, str::FromStr};
 use strum::EnumString;
 
 pub struct LeapConfig {
+    pub target: LeapTargetKind,
     pub include_current_target: bool,
     pub pane_unfocus_behaviour: PaneUnfocusBehaviour,
     pub escape_behavior: EscapeBehavior,
@@ -10,11 +11,22 @@ pub struct LeapConfig {
 impl Default for LeapConfig {
     fn default() -> Self {
         Self {
+            target: LeapTargetKind::Tab,
+            // TODO: works only for tabs. Consider finding previously focused pane,
+            // otherwise make TabExceptActive target
             include_current_target: true,
+            // TODO: set default to Close
             pane_unfocus_behaviour: PaneUnfocusBehaviour::None,
             escape_behavior: EscapeBehavior::Close,
         }
     }
+}
+
+#[derive(EnumString)]
+#[strum(serialize_all = "snake_case")]
+pub enum LeapTargetKind {
+    Tab,
+    PaneInActiveTab,
 }
 
 #[derive(EnumString)]
@@ -37,6 +49,7 @@ impl LeapConfig {
         let default = LeapConfig::default();
 
         Self {
+            target: Self::parse_str_enum(&configuration, "leap_target", default.target),
             include_current_target: Self::parse_bool_pair(
                 &configuration,
                 "leap_include_current_target",

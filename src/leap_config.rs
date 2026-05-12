@@ -3,7 +3,6 @@ use strum::EnumString;
 
 pub struct LeapConfig {
     pub target: LeapTargetKind,
-    pub include_current_target: bool,
     pub pane_unfocus_behaviour: PaneUnfocusBehaviour,
     pub escape_behavior: EscapeBehavior,
 }
@@ -12,9 +11,6 @@ impl Default for LeapConfig {
     fn default() -> Self {
         Self {
             target: LeapTargetKind::Tab,
-            // TODO: works only for tabs. Consider finding previously focused pane,
-            // otherwise make TabExceptActive target
-            include_current_target: true,
             // TODO: set default to Close
             pane_unfocus_behaviour: PaneUnfocusBehaviour::None,
             escape_behavior: EscapeBehavior::Close,
@@ -26,7 +22,9 @@ impl Default for LeapConfig {
 #[strum(serialize_all = "snake_case")]
 pub enum LeapTargetKind {
     Tab,
+    TabExceptActive,
     PaneInActiveTab,
+    // TODO: PaneAcrossTabs?
 }
 
 #[derive(EnumString)]
@@ -50,11 +48,6 @@ impl LeapConfig {
 
         Self {
             target: Self::parse_str_enum(&configuration, "leap_target", default.target),
-            include_current_target: Self::parse_bool_pair(
-                &configuration,
-                "leap_include_current_target",
-                default.include_current_target,
-            ),
             pane_unfocus_behaviour: Self::parse_str_enum(
                 &configuration,
                 "leap_on_pane_unfocus",
@@ -65,20 +58,6 @@ impl LeapConfig {
                 "leap_on_escape",
                 default.escape_behavior,
             ),
-        }
-    }
-
-    fn parse_bool_pair(configuration: &BTreeMap<String, String>, key: &str, default: bool) -> bool {
-        let Some(config_value) = configuration.get(key) else {
-            return default;
-        };
-
-        if config_value == "true" {
-            true
-        } else if config_value == "false" {
-            false
-        } else {
-            default
         }
     }
 

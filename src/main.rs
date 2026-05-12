@@ -59,7 +59,7 @@ impl ZellijPlugin for LeapState {
 
     fn render(&mut self, rows: usize, cols: usize) {
         let hint_text = match self.config.target {
-            LeapTargetKind::Tab => "leap to tab:",
+            LeapTargetKind::Tab | LeapTargetKind::TabExceptActive => "leap to tab:",
             LeapTargetKind::PaneInActiveTab => "leap to pane:",
         };
 
@@ -121,17 +121,22 @@ impl ZellijPlugin for LeapState {
 
 impl LeapState {
     fn handle_tab_update(&mut self, tabs: Vec<TabInfo>) -> bool {
-        if !matches!(self.config.target, LeapTargetKind::Tab) {
+        if !matches!(
+            self.config.target,
+            LeapTargetKind::Tab | LeapTargetKind::TabExceptActive
+        ) {
             return false;
         }
 
         self.input.clear();
 
+        let include_active = matches!(self.config.target, LeapTargetKind::Tab);
+
         self.targets = tabs
             .iter()
             .map(|tab| LeapTarget {
                 name: MatchedString::new(tab.name.clone()),
-                being_matched: !tab.active || self.config.include_current_target,
+                being_matched: !tab.active || include_active,
                 current: tab.active,
                 location: LeapLocation::Tab(TabIndex(tab.position)),
             })

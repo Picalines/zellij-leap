@@ -26,7 +26,6 @@ struct LeapTarget {
 struct LeapState {
     config: LeapConfig,
     targets: Vec<LeapTarget>,
-    input: String,
     is_pane_focused: bool,
 }
 
@@ -128,8 +127,6 @@ impl LeapState {
             return false;
         }
 
-        self.input.clear();
-
         let include_active = matches!(self.config.target, LeapTargetKind::Tab);
 
         self.targets = tabs
@@ -160,8 +157,6 @@ impl LeapState {
             return false;
         };
 
-        self.input.clear();
-
         self.targets = panes
             .iter()
             .filter_map(|pane| {
@@ -191,7 +186,7 @@ impl LeapState {
         match key.bare_key {
             BareKey::Esc => self.handle_escape(),
             BareKey::Char('u') if has_ctrl => {
-                self.reset_input();
+                self.reset_matching();
                 true
             }
             BareKey::Char(ch) if no_mods => {
@@ -222,7 +217,7 @@ impl LeapState {
         match (number_of_matches, last_matched_location) {
             (0, _) => self.handle_no_matches(),
             (1, Some(leap_location)) => Self::switch_to_location(&leap_location),
-            _ => self.input.push(ch),
+            _ => (),
         };
     }
 
@@ -245,8 +240,12 @@ impl LeapState {
     }
 
     fn handle_escape(&mut self) -> bool {
-        if !self.input.is_empty() {
-            self.reset_input();
+        if self
+            .targets
+            .iter()
+            .any(|target| target.name.matched().is_some())
+        {
+            self.reset_matching();
             return true;
         }
 
@@ -276,9 +275,7 @@ impl LeapState {
         Some((TabIndex(tab_index), focused_pane_id))
     }
 
-    fn reset_input(&mut self) {
-        self.input.clear();
-
+    fn reset_matching(&mut self) {
         for target in self.targets.iter_mut() {
             target.being_matched = true;
             target.name.reset();

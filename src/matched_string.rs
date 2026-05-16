@@ -23,6 +23,14 @@ impl MatchedString {
         (before_start, matched, after_matched)
     }
 
+    pub fn matched(&self) -> Option<&str> {
+        let (_, matched, _) = self.split();
+        match matched {
+            "" => None,
+            _ => Some(matched),
+        }
+    }
+
     pub fn match_char(&mut self, ch: char) -> bool {
         let ch_lower = ch.to_ascii_lowercase();
         let ch_upper = ch.to_ascii_uppercase();

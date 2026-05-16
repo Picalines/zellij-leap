@@ -4,15 +4,18 @@ mod utils;
 
 use owo_colors::OwoColorize;
 use std::collections::BTreeMap;
+use std::time::Duration;
 use zellij_tile::prelude::*;
 
 use crate::leap_config::*;
 use crate::matched_string::MatchedString;
 use crate::utils::*;
 
+#[derive(Clone)]
 enum LeapLocation {
     Tab(TabIndex),
     Pane(PaneId),
+    Session(SessionName),
 }
 
 struct LeapTarget {
@@ -42,7 +45,12 @@ impl ZellijPlugin for LeapState {
             PermissionType::ChangeApplicationState,
         ]);
 
-        subscribe(&[EventType::Key, EventType::PaneUpdate, EventType::TabUpdate]);
+        subscribe(&[
+            EventType::Key,
+            EventType::PaneUpdate,
+            EventType::SessionUpdate,
+            EventType::TabUpdate,
+        ]);
 
         rename_plugin_pane(get_plugin_ids().plugin_id, "leap");
     }
@@ -51,15 +59,26 @@ impl ZellijPlugin for LeapState {
         match event {
             Event::Key(key) => self.handle_key(key),
             Event::PaneUpdate(panes) => self.handle_pane_update(panes),
+            Event::SessionUpdate(sessions, resurrectable_sessions) => {
+                self.handle_session_update(sessions, resurrectable_sessions)
+            }
             Event::TabUpdate(tabs) => self.handle_tab_update(tabs),
             _ => false,
         }
     }
 
     fn render(&mut self, rows: usize, cols: usize) {
-        let hint_text = match self.config.target {
-            LeapTargetKind::Tab | LeapTargetKind::TabExceptActive => "leap to tab:",
-            LeapTargetKind::PaneInActiveTab => "leap to pane:",
+        let hint_text = match self.targets.len() {
+            0 => match self.config.target {
+                LeapTargetKind::Tab | LeapTargetKind::TabExceptActive => "awaiting tabs...",
+                LeapTargetKind::PaneInActiveTab => "awaiting panes...",
+                LeapTargetKind::Session => "awaiting sessions...",
+            },
+            _ => match self.config.target {
+                LeapTargetKind::Tab | LeapTargetKind::TabExceptActive => "leap to tab:",
+                LeapTargetKind::PaneInActiveTab => "leap to pane:",
+                LeapTargetKind::Session => "leap to session:",
+            },
         };
 
         // I wanted this code to not allocate, so beware:
@@ -120,63 +139,61 @@ impl ZellijPlugin for LeapState {
 
 impl LeapState {
     fn handle_tab_update(&mut self, tabs: Vec<TabInfo>) -> bool {
-        if !matches!(
-            self.config.target,
-            LeapTargetKind::Tab | LeapTargetKind::TabExceptActive
-        ) {
+        if self.is_pane_focused && !self.targets.is_empty() {
             return false;
         }
 
-        let include_active = matches!(self.config.target, LeapTargetKind::Tab);
-
-        self.targets = tabs
-            .iter()
-            .map(|tab| LeapTarget {
-                name: MatchedString::new(tab.name.clone()),
-                being_matched: !tab.active || include_active,
-                current: tab.active,
-                location: LeapLocation::Tab(TabIndex(tab.position)),
-            })
-            .collect();
-
-        true
+        match self.config.target {
+            LeapTargetKind::Tab => {
+                self.assign_tab_targets(tabs.iter(), true);
+                true
+            }
+            LeapTargetKind::TabExceptActive => {
+                self.assign_tab_targets(tabs.iter(), false);
+                true
+            }
+            _ => false,
+        }
     }
 
     fn handle_pane_update(&mut self, panes: PaneManifest) -> bool {
-        let Some((tab_index, _)) = self.handle_focus_state() else {
+        let Some((focused_tab_index, _)) = self.handle_focus_state() else {
             return false;
         };
 
-        if !matches!(self.config.target, LeapTargetKind::PaneInActiveTab) {
+        if self.is_pane_focused && !self.targets.is_empty() {
             return false;
         }
 
-        let self_plugin_id = get_plugin_ids().plugin_id;
+        match self.config.target {
+            LeapTargetKind::PaneInActiveTab => {
+                let Some(panes) = panes.panes.get(&focused_tab_index.0) else {
+                    return false;
+                };
 
-        let Some(panes) = panes.panes.get(&tab_index.0) else {
+                self.assign_pane_targets(panes.iter());
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn handle_session_update(
+        &mut self,
+        live_sessions: Vec<SessionInfo>,
+        resurrectable_sessions: Vec<(String, Duration)>,
+    ) -> bool {
+        if !self.targets.is_empty() {
             return false;
-        };
+        }
 
-        self.targets = panes
-            .iter()
-            .filter_map(|pane| {
-                let is_self_plugin = pane.is_plugin && pane.id == self_plugin_id;
-
-                // TODO: config for suppressed panes?
-                if is_self_plugin || !pane.is_selectable || pane.is_suppressed {
-                    return None;
-                }
-
-                Some(LeapTarget {
-                    name: MatchedString::new(pane.title.clone()),
-                    being_matched: true,
-                    current: false,
-                    location: LeapLocation::Pane(pane_id_from_pane(pane)),
-                })
-            })
-            .collect();
-
-        true
+        match self.config.target {
+            LeapTargetKind::Session => {
+                self.assign_session_targets(live_sessions.iter(), resurrectable_sessions.iter());
+                true
+            }
+            _ => false,
+        }
     }
 
     fn handle_key(&mut self, key: KeyWithModifier) -> bool {
@@ -199,7 +216,7 @@ impl LeapState {
 
     fn handle_char_key(&mut self, ch: char) {
         let mut number_of_matches = 0usize;
-        let mut last_matched_location: Option<&LeapLocation> = None;
+        let mut last_matched_location: Option<LeapLocation> = None;
 
         for target in self.targets.iter_mut() {
             if !target.being_matched {
@@ -208,7 +225,7 @@ impl LeapState {
 
             if target.name.match_char(ch) {
                 number_of_matches += 1;
-                last_matched_location = Some(&target.location);
+                last_matched_location = Some(target.location.clone());
             } else {
                 target.being_matched = false;
             }
@@ -216,19 +233,26 @@ impl LeapState {
 
         match (number_of_matches, last_matched_location) {
             (0, _) => self.handle_no_matches(),
-            (1, Some(leap_location)) => Self::switch_to_location(&leap_location),
+            (1, Some(leap_location)) => self.switch_to_location(&leap_location),
             _ => (),
         };
     }
 
-    fn switch_to_location(leap_location: &LeapLocation) {
-        _ = hide_floating_panes(None);
-        close_self();
+    fn switch_to_location(&mut self, leap_location: &LeapLocation) {
+        self.handle_matched();
 
         match leap_location {
             LeapLocation::Tab(tab_index) => switch_tab_to((*tab_index).0 as u32 + 1),
             LeapLocation::Pane(pane_id) => focus_pane_with_id(*pane_id, false, false),
+            LeapLocation::Session(session_name) => switch_session(Some(&session_name.0)),
         }
+    }
+
+    fn handle_matched(&mut self) {
+        // TODO: matched behavior option?
+        self.targets.clear();
+        _ = hide_floating_panes(None);
+        close_self();
     }
 
     fn handle_no_matches(&mut self) {
@@ -255,6 +279,73 @@ impl LeapState {
         }
 
         false
+    }
+
+    fn assign_tab_targets<'a>(
+        &mut self,
+        tabs: impl Iterator<Item = &'a TabInfo>,
+        include_active: bool,
+    ) {
+        self.targets = tabs
+            .map(|tab| LeapTarget {
+                name: MatchedString::new(tab.name.clone()),
+                being_matched: !tab.active || include_active,
+                current: tab.active,
+                location: LeapLocation::Tab(TabIndex(tab.position)),
+            })
+            .collect();
+    }
+
+    fn assign_pane_targets<'a>(&mut self, panes: impl Iterator<Item = &'a PaneInfo>) {
+        let self_plugin_id = get_plugin_ids().plugin_id;
+
+        self.targets = panes
+            .filter_map(|pane| {
+                let is_self_plugin = pane.is_plugin && pane.id == self_plugin_id;
+
+                // TODO: config for suppressed panes?
+                if is_self_plugin || !pane.is_selectable || pane.is_suppressed {
+                    return None;
+                }
+
+                Some(LeapTarget {
+                    name: MatchedString::new(pane.title.clone()),
+                    being_matched: true,
+                    current: false,
+                    location: LeapLocation::Pane(pane_id_from_pane(pane)),
+                })
+            })
+            .collect();
+    }
+
+    fn assign_session_targets<'a, 'b>(
+        &mut self,
+        live_sessions: impl Iterator<Item = &'a SessionInfo>,
+        resurrectable_sessions: impl Iterator<Item = &'b (String, Duration)>,
+    ) {
+        struct SessionTargetInfo {
+            name: SessionName,
+            is_current: bool,
+        }
+
+        let session_targets = live_sessions
+            .map(|session| SessionTargetInfo {
+                name: SessionName(session.name.clone()),
+                is_current: session.is_current_session,
+            })
+            .chain(resurrectable_sessions.map(|(name, _)| SessionTargetInfo {
+                name: SessionName(name.clone()),
+                is_current: false,
+            }));
+
+        self.targets = session_targets
+            .map(|session| LeapTarget {
+                name: MatchedString::new(session.name.0.clone()),
+                being_matched: true,
+                current: session.is_current,
+                location: LeapLocation::Session(session.name),
+            })
+            .collect();
     }
 
     fn handle_focus_state(&mut self) -> Option<(TabIndex, PaneId)> {

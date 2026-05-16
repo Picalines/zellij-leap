@@ -28,16 +28,22 @@ keybinds {
         bind "Space" {
             LaunchOrFocusPlugin "leap" {
                 floating true
-                move_to_focused_tab true
-                leap_include_current_target true // False to exclude current tab from matching
-                leap_on_pane_unfocus "none"      // Behavior when pane loses focus: "none" or "close"
-                leap_on_escape "close"           // Behavior on escape key: "close" or "hide_floating_panes"
+                leap_target "tab"                    // Target. See "Targets" section below
+                leap_on_pane_unfocus "none"          // Behavior when pane loses focus: "none" or "close"
+                leap_on_escape "close"               // Behavior on escape key: "close" or "hide_floating_panes"
             }
             SwitchToMode "normal";
         }
     }
 }
 ```
+
+### Targets
+
+- `tab` - Jump to any tab, including the currently active tab
+- `tab_except_active` - Jump to any tab except the currently active one
+- `pane_in_active_tab` - Jump to any pane within the currently active tab
+- `session` (work in progress, might work buggy) - Jump to any session (including resurrectable ones)
 
 ## Matching algorithm
 

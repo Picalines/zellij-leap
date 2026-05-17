@@ -2230,7 +2230,7 @@ checksum = "bec47e5bfd1bff0eeaf6d8b485cc1074891a197ab4225d504cb7a1ab88b02bf0"
 
 [[package]]
 name = "zellij-leap"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "owo-colors 4.3.0",
  "strum 0.28.0",

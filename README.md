@@ -47,7 +47,8 @@ keybinds {
 
 ## Matching algorithm
 
-1. Search each tab name for the first occurrence of the typed character (case-insensitive)
+1. Search each tab name for occurrences of the typed character (case-insensitive)
 2. Filter out tabs that don't contain the character
-3. For subsequent characters, search only the portion of the name after the previous match
-4. Automatically jump to the tab when only one match remains
+3. If the character appears multiple times, remember list of possible next characters and pick one on second key press. Second character must be unique, otherwise plugin picks leftmost match
+4. For subsequent characters, search only the portion of the name after the previous match
+5. Automatically jump to the tab when only one match remains

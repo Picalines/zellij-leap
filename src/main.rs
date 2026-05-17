@@ -1,5 +1,5 @@
 mod leap_config;
-mod matched_string;
+mod matching;
 mod utils;
 
 use owo_colors::OwoColorize;
@@ -8,7 +8,7 @@ use std::time::Duration;
 use zellij_tile::prelude::*;
 
 use crate::leap_config::*;
-use crate::matched_string::MatchedString;
+use crate::matching::*;
 use crate::utils::*;
 
 #[derive(Clone)]
@@ -112,27 +112,24 @@ impl ZellijPlugin for LeapState {
                 continue;
             }
 
-            let (before_match, matched, after_match) = target.name.split();
-
-            if matched.is_empty() {
+            if matches!(target.name.state(), MatchingState::Pending) {
                 println!("{}", target.name.str());
-            } else if after_match.is_empty() {
-                println!(
-                    "{}{}{}",
-                    before_match.dimmed(),
-                    matched.bold().dimmed(),
-                    after_match
-                )
-            } else {
-                let (next_input, after_next) = after_match.split_at(1);
-                println!(
-                    "{}{}{}{}",
-                    before_match.dimmed(),
-                    matched.bold().dimmed(),
-                    next_input.underline().green(),
-                    after_next.dimmed()
-                )
+                continue;
             }
+
+            for (i, (part_kind, part)) in target.name.parts().enumerate() {
+                match part_kind {
+                    MatchingPart::String if i == 0 => print!("{}", part.dimmed()),
+                    MatchingPart::String => {
+                        let (first_char, rest) = part.split_at(1);
+                        print!("{}{}", first_char, rest.dimmed());
+                    }
+                    MatchingPart::Anchor => print!("{}", part.yellow()),
+                    MatchingPart::Match => print!("{}", part.green()),
+                }
+            }
+
+            println!();
         }
     }
 }
@@ -267,7 +264,7 @@ impl LeapState {
         if self
             .targets
             .iter()
-            .any(|target| target.name.matched().is_some())
+            .any(|target| !matches!(target.name.state(), MatchingState::Pending))
         {
             self.reset_matching();
             return true;

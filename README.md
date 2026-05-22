@@ -43,7 +43,8 @@ keybinds {
 - `tab` - Jump to any tab, including the currently active tab
 - `tab_except_active` - Jump to any tab except the currently active one
 - `pane_in_active_tab` - Jump to any pane within the currently active tab
-- `session` (work in progress, might work buggy) - Jump to any session (including resurrectable ones)
+- `session` - Jump to any session (including resurrectable ones)
+- `session_except_current` - Jump to any session (including resurrectable ones) except current one
 
 ## Matching algorithm
 

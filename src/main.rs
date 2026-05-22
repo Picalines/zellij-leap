@@ -30,6 +30,7 @@ struct LeapState {
     config: LeapConfig,
     targets: Vec<LeapTarget>,
     is_pane_focused: bool,
+    error: Option<String>,
 }
 
 register_plugin!(LeapState);
@@ -48,19 +49,17 @@ impl ZellijPlugin for LeapState {
         subscribe(&[
             EventType::Key,
             EventType::PaneUpdate,
-            EventType::SessionUpdate,
+            EventType::PermissionRequestResult,
             EventType::TabUpdate,
         ]);
-
-        rename_plugin_pane(get_plugin_ids().plugin_id, "leap");
     }
 
     fn update(&mut self, event: Event) -> bool {
         match event {
             Event::Key(key) => self.handle_key(key),
             Event::PaneUpdate(panes) => self.handle_pane_update(panes),
-            Event::SessionUpdate(sessions, resurrectable_sessions) => {
-                self.handle_session_update(sessions, resurrectable_sessions)
+            Event::PermissionRequestResult(permissions) => {
+                self.handle_permissions_update(permissions)
             }
             Event::TabUpdate(tabs) => self.handle_tab_update(tabs),
             _ => false,
@@ -68,40 +67,59 @@ impl ZellijPlugin for LeapState {
     }
 
     fn render(&mut self, rows: usize, cols: usize) {
-        let hint_text = match self.targets.len() {
-            0 => match self.config.target {
-                LeapTargetKind::Tab | LeapTargetKind::TabExceptActive => "awaiting tabs...",
-                LeapTargetKind::PaneInActiveTab => "awaiting panes...",
-                LeapTargetKind::Session => "awaiting sessions...",
-            },
-            _ => match self.config.target {
-                LeapTargetKind::Tab | LeapTargetKind::TabExceptActive => "leap to tab:",
-                LeapTargetKind::PaneInActiveTab => "leap to pane:",
-                LeapTargetKind::Session => "leap to session:",
+        let hint_text = match self.error {
+            Some(_) => "error:",
+            None => match self.targets.len() {
+                0 => match self.config.target {
+                    LeapTargetKind::Tab | LeapTargetKind::TabExceptActive => "awaiting tabs...",
+                    LeapTargetKind::PaneInActiveTab => "awaiting panes...",
+                    LeapTargetKind::Session => "awaiting sessions...",
+                },
+                _ => match self.config.target {
+                    LeapTargetKind::Tab | LeapTargetKind::TabExceptActive => "leap to tab:",
+                    LeapTargetKind::PaneInActiveTab => "leap to pane:",
+                    LeapTargetKind::Session => "leap to session:",
+                },
             },
         };
 
         // I wanted this code to not allocate, so beware:
         // we calculate size of UI before rendering it
+
+        // (1 for hint_text)
+        let height = 1 + match self.error {
+            None => self.targets.len(),
+            Some(_) => 1,
+        };
+
         let target_prefix_width = 2;
-        let width = hint_text.len().max(
-            self.targets
-                .iter()
-                .map(|target| target_prefix_width + target.name.str().chars().count())
-                .max()
-                .unwrap_or(0),
-        );
-        let left_padding = cols.saturating_sub(width).saturating_div(2);
+        let width = Self::text_width(hint_text)
+            .max(
+                self.error
+                    .as_ref()
+                    .map(|text| Self::text_width(text))
+                    .unwrap_or(0),
+            )
+            .max(
+                self.targets
+                    .iter()
+                    .map(|target| target_prefix_width + Self::text_width(target.name.str()))
+                    .max()
+                    .unwrap_or(0),
+            );
 
-        let height = self.targets.len() + 1; // 1 for hint
-        let top_padding = rows.saturating_sub(height).saturating_div(2);
-        print!("{:\n<1$}", "", top_padding);
+        let print_left_padding = Self::start_centered_render(rows, cols, height, width);
 
-        print!("{: <1$}", "", left_padding);
         println!("{}", hint_text.dimmed());
 
+        if let Some(ref error_text) = self.error {
+            print_left_padding();
+            print!("{}", error_text.red());
+            return;
+        }
+
         for target in self.targets.iter() {
-            print!("{: <1$}", "", left_padding);
+            print_left_padding();
 
             let prefix = if target.current { "> " } else { "  " };
             debug_assert_eq!(prefix.len(), target_prefix_width);
@@ -135,6 +153,32 @@ impl ZellijPlugin for LeapState {
 }
 
 impl LeapState {
+    fn handle_permissions_update(&mut self, permission_status: PermissionStatus) -> bool {
+        if !matches!(permission_status, PermissionStatus::Granted) {
+            self.error = Some("permissions not granted".to_string());
+            return true;
+        }
+
+        rename_plugin_pane(get_plugin_ids().plugin_id, "leap");
+
+        match self.config.target {
+            LeapTargetKind::Session => match get_session_list() {
+                Err(error) => {
+                    self.error = Some(format!("failed to fetch session list: {}", error));
+                    true
+                }
+                Ok(sessions) => {
+                    self.assign_session_targets(
+                        sessions.live_sessions.iter(),
+                        sessions.resurrectable_sessions.iter(),
+                    );
+                    true
+                }
+            },
+            _ => false,
+        }
+    }
+
     fn handle_tab_update(&mut self, tabs: Vec<TabInfo>) -> bool {
         if self.is_pane_focused && !self.targets.is_empty() {
             return false;
@@ -175,24 +219,6 @@ impl LeapState {
         }
     }
 
-    fn handle_session_update(
-        &mut self,
-        live_sessions: Vec<SessionInfo>,
-        resurrectable_sessions: Vec<(String, Duration)>,
-    ) -> bool {
-        if !self.targets.is_empty() {
-            return false;
-        }
-
-        match self.config.target {
-            LeapTargetKind::Session => {
-                self.assign_session_targets(live_sessions.iter(), resurrectable_sessions.iter());
-                true
-            }
-            _ => false,
-        }
-    }
-
     fn handle_key(&mut self, key: KeyWithModifier) -> bool {
         let has_ctrl = key.has_modifiers(&[KeyModifier::Ctrl]);
         let no_mods = key.key_modifiers.is_empty();
@@ -212,6 +238,10 @@ impl LeapState {
     }
 
     fn handle_char_key(&mut self, ch: char) {
+        if self.error.is_some() {
+            return;
+        }
+
         let mut number_of_matches = 0usize;
         let mut last_matched_location: Option<LeapLocation> = None;
 
@@ -368,5 +398,28 @@ impl LeapState {
             target.being_matched = true;
             target.name.reset();
         }
+    }
+
+    fn text_width(str: &str) -> usize {
+        str.chars().count()
+    }
+
+    fn start_centered_render(
+        total_rows: usize,
+        total_cols: usize,
+        used_rows: usize,
+        used_cols: usize,
+    ) -> impl Fn() {
+        let top_padding = total_rows.saturating_sub(used_rows).saturating_div(2);
+        print!("{:\n<1$}", "", top_padding);
+
+        let left_padding = total_cols.saturating_sub(used_cols).saturating_div(2);
+        let print_left_padding = move || {
+            print!("{: <1$}", "", left_padding);
+        };
+
+        print_left_padding();
+
+        print_left_padding
     }
 }

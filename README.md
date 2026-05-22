@@ -46,6 +46,14 @@ keybinds {
 - `session` - Jump to any session (including resurrectable ones)
 - `session_except_current` - Jump to any session (including resurrectable ones) except current one
 
+## Special keys
+
+- `Esc` - Reset current matching, or close/hide the plugin if nothing is being matched
+- `Enter` - Jump to the currently selected target (indicated by `>` sign)
+- `Up` / `Ctrl-k` / `Ctrl-p` - Move selection up
+- `Down` / `Ctrl-j` / `Ctrl-n` - Move selection down
+- `Ctrl-u` - Reset current matching
+
 ## Matching algorithm
 
 1. Search each tab name for occurrences of the typed character (case-insensitive)

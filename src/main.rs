@@ -18,6 +18,11 @@ enum LeapLocation {
     Session(SessionName),
 }
 
+enum MoveSelectionDirection {
+    Up,
+    Down,
+}
+
 struct LeapTarget {
     name: MatchedString,
     being_matched: bool,
@@ -29,6 +34,7 @@ struct LeapTarget {
 struct LeapState {
     config: LeapConfig,
     targets: Vec<LeapTarget>,
+    manual_selection: Option<usize>,
     is_pane_focused: bool,
     error: Option<String>,
 }
@@ -122,10 +128,14 @@ impl ZellijPlugin for LeapState {
             return;
         }
 
-        for target in self.targets.iter() {
+        let selected_target_index = self.assumed_selection();
+
+        for (index, target) in self.targets.iter().enumerate() {
             print_left_padding();
 
-            let prefix = if target.current { "> " } else { "  " };
+            let prefix = (selected_target_index == Some(index))
+                .then_some("> ")
+                .unwrap_or("  ");
             debug_assert_eq!(prefix.len(), target_prefix_width);
             print!("{}", prefix.green());
 
@@ -174,6 +184,7 @@ impl LeapState {
                     }
                     Ok(sessions) => {
                         let match_current = matches!(self.config.target, LeapTargetKind::Session);
+                        self.manual_selection = None;
                         self.assign_session_targets(
                             sessions.live_sessions.iter(),
                             sessions.resurrectable_sessions.iter(),
@@ -194,10 +205,12 @@ impl LeapState {
 
         match self.config.target {
             LeapTargetKind::Tab => {
+                self.manual_selection = None;
                 self.assign_tab_targets(tabs.iter(), true);
                 true
             }
             LeapTargetKind::TabExceptActive => {
+                self.manual_selection = None;
                 self.assign_tab_targets(tabs.iter(), false);
                 true
             }
@@ -220,6 +233,7 @@ impl LeapState {
                     return false;
                 };
 
+                self.manual_selection = None;
                 self.assign_pane_targets(panes.iter());
                 true
             }
@@ -231,13 +245,22 @@ impl LeapState {
         let has_ctrl = key.has_modifiers(&[KeyModifier::Ctrl]);
         let no_mods = key.key_modifiers.is_empty();
 
-        match key.bare_key {
-            BareKey::Esc => self.handle_escape(),
-            BareKey::Char('u') if has_ctrl => {
+        match (key.bare_key, has_ctrl) {
+            (BareKey::Esc, _) => self.handle_escape(),
+            (BareKey::Enter, _) => self.handle_enter(),
+            (BareKey::Up, _) | (BareKey::Char('k' | 'p'), true) => {
+                self.move_manual_selection(MoveSelectionDirection::Up);
+                true
+            }
+            (BareKey::Down, _) | (BareKey::Char('j' | 'n'), true) => {
+                self.move_manual_selection(MoveSelectionDirection::Down);
+                true
+            }
+            (BareKey::Char('u'), true) => {
                 self.reset_matching();
                 true
             }
-            BareKey::Char(ch) if no_mods => {
+            (BareKey::Char(ch), _) if no_mods => {
                 self.handle_char_key(ch);
                 true
             }
@@ -251,26 +274,57 @@ impl LeapState {
         }
 
         let mut number_of_matches = 0usize;
+        let mut first_matched_index: Option<usize> = None;
         let mut last_matched_location: Option<LeapLocation> = None;
 
-        for target in self.targets.iter_mut() {
+        for (index, target) in self.targets.iter_mut().enumerate() {
             if !target.being_matched {
                 continue;
             }
 
             if target.name.match_char(ch) {
                 number_of_matches += 1;
+                first_matched_index = first_matched_index.or(Some(index));
                 last_matched_location = Some(target.location.clone());
             } else {
                 target.being_matched = false;
             }
         }
 
+        self.manual_selection = first_matched_index.or(self.manual_selection);
+
         match (number_of_matches, last_matched_location) {
             (0, _) => self.handle_no_matches(),
             (1, Some(leap_location)) => self.switch_to_location(&leap_location),
             _ => (),
         };
+    }
+
+    fn handle_enter(&mut self) -> bool {
+        match self.assumed_selection() {
+            Some(target_index) => {
+                let leap_location = self.targets[target_index].location.clone();
+                self.switch_to_location(&leap_location);
+                true
+            }
+            None => false,
+        }
+    }
+
+    fn move_manual_selection(&mut self, dir: MoveSelectionDirection) {
+        let Some(target_index) = self.assumed_selection() else {
+            return;
+        };
+
+        let last_index = self.targets.len() - 1;
+        self.manual_selection = Some(match dir {
+            MoveSelectionDirection::Up => (target_index > 0)
+                .then(|| target_index - 1)
+                .unwrap_or(last_index),
+            MoveSelectionDirection::Down => (target_index < last_index)
+                .then(|| target_index + 1)
+                .unwrap_or(0),
+        });
     }
 
     fn switch_to_location(&mut self, leap_location: &LeapLocation) {
@@ -384,6 +438,12 @@ impl LeapState {
             .collect();
     }
 
+    fn assumed_selection(&self) -> Option<usize> {
+        self.manual_selection
+            .filter(|index| *index < self.targets.len())
+            .or_else(|| self.targets.iter().position(|target| target.current))
+    }
+
     fn handle_focus_state(&mut self) -> Option<(TabIndex, PaneId)> {
         let (tab_index, focused_pane_id) = get_focused_pane_info().ok()?;
 
@@ -403,6 +463,7 @@ impl LeapState {
     }
 
     fn reset_matching(&mut self) {
+        self.manual_selection = None;
         for target in self.targets.iter_mut() {
             target.being_matched = true;
             target.name.reset();

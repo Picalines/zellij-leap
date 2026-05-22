@@ -26,6 +26,7 @@ pub enum LeapTargetKind {
     PaneInActiveTab,
     // TODO: PaneAcrossTabs?
     Session,
+    SessionExceptCurrent,
 }
 
 #[derive(EnumString)]

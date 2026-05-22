@@ -73,12 +73,16 @@ impl ZellijPlugin for LeapState {
                 0 => match self.config.target {
                     LeapTargetKind::Tab | LeapTargetKind::TabExceptActive => "awaiting tabs...",
                     LeapTargetKind::PaneInActiveTab => "awaiting panes...",
-                    LeapTargetKind::Session => "awaiting sessions...",
+                    LeapTargetKind::Session | LeapTargetKind::SessionExceptCurrent => {
+                        "awaiting sessions..."
+                    }
                 },
                 _ => match self.config.target {
                     LeapTargetKind::Tab | LeapTargetKind::TabExceptActive => "leap to tab:",
                     LeapTargetKind::PaneInActiveTab => "leap to pane:",
-                    LeapTargetKind::Session => "leap to session:",
+                    LeapTargetKind::Session | LeapTargetKind::SessionExceptCurrent => {
+                        "leap to session:"
+                    }
                 },
             },
         };
@@ -162,19 +166,23 @@ impl LeapState {
         rename_plugin_pane(get_plugin_ids().plugin_id, "leap");
 
         match self.config.target {
-            LeapTargetKind::Session => match get_session_list() {
-                Err(error) => {
-                    self.error = Some(format!("failed to fetch session list: {}", error));
-                    true
+            LeapTargetKind::Session | LeapTargetKind::SessionExceptCurrent => {
+                match get_session_list() {
+                    Err(error) => {
+                        self.error = Some(format!("failed to fetch session list: {}", error));
+                        true
+                    }
+                    Ok(sessions) => {
+                        let match_current = matches!(self.config.target, LeapTargetKind::Session);
+                        self.assign_session_targets(
+                            sessions.live_sessions.iter(),
+                            sessions.resurrectable_sessions.iter(),
+                            match_current,
+                        );
+                        true
+                    }
                 }
-                Ok(sessions) => {
-                    self.assign_session_targets(
-                        sessions.live_sessions.iter(),
-                        sessions.resurrectable_sessions.iter(),
-                    );
-                    true
-                }
-            },
+            }
             _ => false,
         }
     }
@@ -311,12 +319,12 @@ impl LeapState {
     fn assign_tab_targets<'a>(
         &mut self,
         tabs: impl Iterator<Item = &'a TabInfo>,
-        include_active: bool,
+        match_active: bool,
     ) {
         self.targets = tabs
             .map(|tab| LeapTarget {
                 name: MatchedString::new(tab.name.clone()),
-                being_matched: !tab.active || include_active,
+                being_matched: !tab.active || match_active,
                 current: tab.active,
                 location: LeapLocation::Tab(TabIndex(tab.position)),
             })
@@ -349,6 +357,7 @@ impl LeapState {
         &mut self,
         live_sessions: impl Iterator<Item = &'a SessionInfo>,
         resurrectable_sessions: impl Iterator<Item = &'b (String, Duration)>,
+        match_current: bool,
     ) {
         struct SessionTargetInfo {
             name: SessionName,
@@ -368,7 +377,7 @@ impl LeapState {
         self.targets = session_targets
             .map(|session| LeapTarget {
                 name: MatchedString::new(session.name.0.clone()),
-                being_matched: true,
+                being_matched: !session.is_current || match_current,
                 current: session.is_current,
                 location: LeapLocation::Session(session.name),
             })

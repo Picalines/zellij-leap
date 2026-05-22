@@ -1,6 +1,6 @@
 # zellij-leap
 
-Jump to a Zellij tab by typing a few characters of its title
+Jump to a Zellij tab / pane / session by typing a few characters of its name
 
 Inspired by [leap.nvim](https://codeberg.org/andyg/leap.nvim) and its predecessors
 

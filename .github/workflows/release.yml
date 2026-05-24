@@ -39,3 +39,4 @@ jobs:
           draft: true
           prerelease: false
           generateReleaseNotes: true
+          skipIfReleaseExists: true

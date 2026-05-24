@@ -45,7 +45,10 @@ register_plugin!(LeapState);
 
 impl ZellijPlugin for LeapState {
     fn load(&mut self, configuration: BTreeMap<String, String>) {
-        self.config = LeapConfig::parse(configuration);
+        match LeapConfig::parse(configuration) {
+            Ok(config) => self.config = config,
+            Err(error) => self.error = Some(error),
+        }
 
         request_permission(&[
             PermissionType::ReadApplicationState,
@@ -97,9 +100,13 @@ impl ZellijPlugin for LeapState {
         // we calculate size of UI before rendering it
 
         // (1 for hint_text)
+        debug_assert_eq!(hint_text.lines().count(), 1);
         let height = 1 + match self.error {
             None => self.targets.len(),
-            Some(_) => 1,
+            Some(ref error) => {
+                debug_assert_eq!(error.lines().count(), 1);
+                1
+            }
         };
 
         let target_prefix_width = 2;

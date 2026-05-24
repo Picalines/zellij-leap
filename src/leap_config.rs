@@ -1,5 +1,5 @@
 use std::{collections::BTreeMap, str::FromStr};
-use strum::EnumString;
+use strum::{EnumIter, EnumString, IntoEnumIterator, IntoStaticStr};
 
 pub struct LeapConfig {
     pub target: LeapTargetKind,
@@ -18,7 +18,7 @@ impl Default for LeapConfig {
     }
 }
 
-#[derive(EnumString)]
+#[derive(EnumString, EnumIter, IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum LeapTargetKind {
     Tab,
@@ -29,14 +29,14 @@ pub enum LeapTargetKind {
     SessionExceptCurrent,
 }
 
-#[derive(EnumString)]
+#[derive(EnumString, EnumIter, IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum PaneUnfocusBehaviour {
     None,
     Close,
 }
 
-#[derive(EnumString)]
+#[derive(EnumString, EnumIter, IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum EscapeBehavior {
     Close,
@@ -44,34 +44,42 @@ pub enum EscapeBehavior {
 }
 
 impl LeapConfig {
-    // TODO: error reporting could be nice
-    pub fn parse(configuration: BTreeMap<String, String>) -> Self {
+    pub fn parse(configuration: BTreeMap<String, String>) -> Result<Self, String> {
         let default = LeapConfig::default();
 
-        Self {
-            target: Self::parse_str_enum(&configuration, "leap_target", default.target),
+        Ok(Self {
+            target: Self::parse_str_enum(&configuration, "leap_target", default.target)?,
             pane_unfocus_behaviour: Self::parse_str_enum(
                 &configuration,
                 "leap_on_pane_unfocus",
                 default.pane_unfocus_behaviour,
-            ),
+            )?,
             escape_behavior: Self::parse_str_enum(
                 &configuration,
                 "leap_on_escape",
                 default.escape_behavior,
-            ),
-        }
+            )?,
+        })
     }
 
-    fn parse_str_enum<E: FromStr>(
+    fn parse_str_enum<E: FromStr + IntoEnumIterator + Into<&'static str>>(
         configuration: &BTreeMap<String, String>,
         key: &str,
         default: E,
-    ) -> E {
+    ) -> Result<E, String> {
         let Some(config_value) = configuration.get(key) else {
-            return default;
+            return Ok(default);
         };
 
-        E::from_str(config_value).unwrap_or(default)
+        E::from_str(config_value).map_err(|_| {
+            format!(
+                "{key}: '{}' expected, got '{}'",
+                E::iter()
+                    .map(|possible_value| possible_value.into())
+                    .collect::<Vec<_>>()
+                    .join("' | '"),
+                config_value,
+            )
+        })
     }
 }

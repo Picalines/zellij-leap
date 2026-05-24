@@ -462,9 +462,9 @@ impl LeapState {
         let is_focused = focused_pane_id == PaneId::Plugin(plugin_id);
 
         if self.is_pane_focused && !is_focused {
-            match self.config.pane_unfocus_behaviour {
-                PaneUnfocusBehaviour::None => (),
-                PaneUnfocusBehaviour::Close => close_self(),
+            match self.config.pane_unfocus_behavior {
+                PaneUnfocusBehavior::None => (),
+                PaneUnfocusBehavior::Close => close_self(),
             }
         }
 

@@ -4,7 +4,7 @@ use strum::{EnumIter, EnumString, IntoEnumIterator, IntoStaticStr};
 pub struct LeapConfig {
     pub target: LeapTargetKind,
     pub no_match_behavior: NoMatchBehavior,
-    pub pane_unfocus_behaviour: PaneUnfocusBehaviour,
+    pub pane_unfocus_behavior: PaneUnfocusBehavior,
     pub escape_behavior: EscapeBehavior,
 }
 
@@ -13,7 +13,7 @@ impl Default for LeapConfig {
         Self {
             target: LeapTargetKind::Tab,
             no_match_behavior: NoMatchBehavior::Reset,
-            pane_unfocus_behaviour: PaneUnfocusBehaviour::None,
+            pane_unfocus_behavior: PaneUnfocusBehavior::None,
             escape_behavior: EscapeBehavior::Close,
         }
     }
@@ -40,7 +40,7 @@ pub enum NoMatchBehavior {
 
 #[derive(EnumString, EnumIter, IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
-pub enum PaneUnfocusBehaviour {
+pub enum PaneUnfocusBehavior {
     None,
     Close,
 }
@@ -63,10 +63,10 @@ impl LeapConfig {
                 "leap_on_no_match",
                 default.no_match_behavior,
             )?,
-            pane_unfocus_behaviour: Self::parse_str_enum(
+            pane_unfocus_behavior: Self::parse_str_enum(
                 &configuration,
                 "leap_on_pane_unfocus",
-                default.pane_unfocus_behaviour,
+                default.pane_unfocus_behavior,
             )?,
             escape_behavior: Self::parse_str_enum(
                 &configuration,

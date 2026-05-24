@@ -14,3 +14,21 @@ pub fn pane_id_from_pane(pane_info: &PaneInfo) -> PaneId {
         PaneId::Terminal(id)
     }
 }
+
+pub struct Resettable<T> {
+    pub current: T,
+    initial: T,
+}
+
+impl<T: Clone> Resettable<T> {
+    pub fn new(initial_value: T) -> Self {
+        Self {
+            initial: initial_value.clone(),
+            current: initial_value,
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.current = self.initial.clone();
+    }
+}

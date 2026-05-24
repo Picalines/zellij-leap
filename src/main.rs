@@ -25,7 +25,7 @@ enum MoveSelectionDirection {
 
 struct LeapTarget {
     name: MatchedString,
-    being_matched: bool,
+    being_matched: Resettable<bool>,
     current: bool,
     location: LeapLocation,
 }
@@ -146,7 +146,7 @@ impl ZellijPlugin for LeapState {
             debug_assert_eq!(prefix.len(), target_prefix_width);
             print!("{}", prefix.green());
 
-            if !target.being_matched {
+            if !target.being_matched.current {
                 println!("{}", target.name.str().dimmed().strikethrough());
                 continue;
             }
@@ -285,7 +285,7 @@ impl LeapState {
         let mut last_matched_location: Option<LeapLocation> = None;
 
         for (index, target) in self.targets.iter_mut().enumerate() {
-            if !target.being_matched {
+            if !target.being_matched.current {
                 continue;
             }
 
@@ -294,7 +294,7 @@ impl LeapState {
                 first_matched_index = first_matched_index.or(Some(index));
                 last_matched_location = Some(target.location.clone());
             } else {
-                target.being_matched = false;
+                target.being_matched.current = false;
             }
         }
 
@@ -385,7 +385,7 @@ impl LeapState {
         self.targets = tabs
             .map(|tab| LeapTarget {
                 name: MatchedString::new(tab.name.clone()),
-                being_matched: !tab.active || match_active,
+                being_matched: Resettable::new(!tab.active || match_active),
                 current: tab.active,
                 location: LeapLocation::Tab(TabIndex(tab.position)),
             })
@@ -406,7 +406,7 @@ impl LeapState {
 
                 Some(LeapTarget {
                     name: MatchedString::new(pane.title.clone()),
-                    being_matched: true,
+                    being_matched: Resettable::new(true),
                     current: false,
                     location: LeapLocation::Pane(pane_id_from_pane(pane)),
                 })
@@ -438,7 +438,7 @@ impl LeapState {
         self.targets = session_targets
             .map(|session| LeapTarget {
                 name: MatchedString::new(session.name.0.clone()),
-                being_matched: !session.is_current || match_current,
+                being_matched: Resettable::new(!session.is_current || match_current),
                 current: session.is_current,
                 location: LeapLocation::Session(session.name),
             })
@@ -472,7 +472,7 @@ impl LeapState {
     fn reset_matching(&mut self) {
         self.manual_selection = None;
         for target in self.targets.iter_mut() {
-            target.being_matched = true;
+            target.being_matched.reset();
             target.name.reset();
         }
     }

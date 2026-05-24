@@ -352,11 +352,11 @@ impl LeapState {
     }
 
     fn handle_no_matches(&mut self) {
-        // TODO: add option for "no matches" behavior
-        // - just close
-        // - hide floating panes
-        // - reset and display message
-        close_self();
+        match self.config.no_match_behavior {
+            NoMatchBehavior::Reset => self.reset_matching(),
+            NoMatchBehavior::Close => close_self(),
+            NoMatchBehavior::HideFloatingPanes => _ = hide_floating_panes(None),
+        }
     }
 
     fn handle_escape(&mut self) -> bool {

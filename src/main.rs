@@ -41,8 +41,6 @@ struct LeapState {
 
 register_plugin!(LeapState);
 
-// TODO: handle exact matches or tabs with same names
-
 impl ZellijPlugin for LeapState {
     fn load(&mut self, configuration: BTreeMap<String, String>) {
         match LeapConfig::parse(configuration) {

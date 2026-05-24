@@ -109,7 +109,7 @@ impl ZellijPlugin for LeapState {
             }
         };
 
-        let target_prefix_width = 2;
+        let prefix_width = 2;
         let width = Self::text_width(hint_text)
             .max(
                 self.error
@@ -120,7 +120,7 @@ impl ZellijPlugin for LeapState {
             .max(
                 self.targets
                     .iter()
-                    .map(|target| target_prefix_width + Self::text_width(target.name.str()))
+                    .map(|target| prefix_width + Self::text_width(target.name.str()))
                     .max()
                     .unwrap_or(0),
             );
@@ -135,16 +135,19 @@ impl ZellijPlugin for LeapState {
             return;
         }
 
-        let selected_target_index = self.assumed_selection();
+        let selection_index = self.assumed_selection();
 
         for (index, target) in self.targets.iter().enumerate() {
             print_left_padding();
 
-            let prefix = (selected_target_index == Some(index))
-                .then_some("> ")
-                .unwrap_or("  ");
-            debug_assert_eq!(prefix.len(), target_prefix_width);
-            print!("{}", prefix.green());
+            let prefix = match (target.current, selection_index == Some(index)) {
+                (true, true) => "» ".green().into_styled(),
+                (false, true) => "> ".green().into_styled(),
+                (true, false) => "- ".dimmed().into_styled(),
+                _ => "  ".hidden().into_styled(),
+            };
+            debug_assert_eq!(Self::text_width(prefix.inner()), prefix_width);
+            print!("{}", prefix);
 
             if !target.being_matched.current {
                 println!("{}", target.name.str().dimmed().strikethrough());
@@ -447,8 +450,9 @@ impl LeapState {
 
     fn assumed_selection(&self) -> Option<usize> {
         self.manual_selection
-            .filter(|index| *index < self.targets.len())
             .or_else(|| self.targets.iter().position(|target| target.current))
+            .or(Some(0))
+            .filter(|index| *index < self.targets.len())
     }
 
     fn handle_focus_state(&mut self) -> Option<(TabIndex, PaneId)> {

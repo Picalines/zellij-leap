@@ -28,9 +28,10 @@ keybinds {
         bind "Space" {
             LaunchOrFocusPlugin "leap" {
                 floating true
-                leap_target "tab"                    // Target. See "Targets" section below
-                leap_on_pane_unfocus "none"          // Behavior when pane loses focus: "none" or "close"
-                leap_on_escape "close"               // Behavior on escape key: "close" or "hide_floating_panes"
+                leap_target "tab"           // Target. See "Targets" section below
+                leap_on_no_match "reset"    // Behavior when no match found: "reset", "close", or "hide_floating_panes"
+                leap_on_pane_unfocus "none" // Behavior when pane loses focus: "none" or "close"
+                leap_on_escape "close"      // Behavior on escape key: "close" or "hide_floating_panes"
             }
             SwitchToMode "normal";
         }
@@ -49,9 +50,9 @@ keybinds {
 ## Special keys
 
 - `Esc` - Reset current matching, or close/hide the plugin if nothing is being matched
-- `Enter` - Jump to the currently selected target (indicated by `>` sign)
-- `Up` / `Ctrl-k` / `Ctrl-p` - Move selection up
+- `Up` / `Ctrl-k` / `Ctrl-p` - Move selection up manually. Useful when you have targets with very similar names
 - `Down` / `Ctrl-j` / `Ctrl-n` - Move selection down
+- `Enter` - Jump to the currently selected target (indicated by `»` or `>` sign)
 - `Ctrl-u` - Reset current matching
 
 ## Matching algorithm

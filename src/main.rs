@@ -361,6 +361,8 @@ impl LeapState {
     }
 
     fn handle_escape(&mut self) -> bool {
+        // TODO: "reset_or_close" | "reset_or_hide_floating"?
+
         if self
             .targets
             .iter()

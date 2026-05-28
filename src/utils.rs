@@ -1,4 +1,7 @@
-use zellij_tile::prelude::{PaneId, PaneInfo};
+use zellij_tile::{
+    prelude::{PaneId, PaneInfo},
+    shim::hide_floating_panes,
+};
 
 #[derive(Clone)]
 pub struct TabIndex(pub usize);
@@ -31,4 +34,8 @@ impl<T: Clone> Resettable<T> {
     pub fn reset(&mut self) {
         self.current = self.initial.clone();
     }
+}
+
+pub fn hide_floating_panes_in_active_tab() {
+    _ = hide_floating_panes(None);
 }

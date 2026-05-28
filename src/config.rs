@@ -49,7 +49,9 @@ pub enum PaneUnfocusBehavior {
 #[strum(serialize_all = "snake_case")]
 pub enum EscapeBehavior {
     Close,
+    ResetOrClose,
     HideFloatingPanes,
+    ResetOrHideFloatingPanes,
 }
 
 impl LeapConfig {

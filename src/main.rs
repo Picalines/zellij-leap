@@ -264,10 +264,7 @@ impl LeapState {
                 self.move_manual_selection(MoveSelectionDirection::Down);
                 true
             }
-            (BareKey::Char('u'), true) => {
-                self.reset_matching();
-                true
-            }
+            (BareKey::Char('u'), true) => self.reset_matching(),
             (BareKey::Char(ch), _) if no_mods => {
                 self.handle_char_key(ch);
                 true
@@ -348,36 +345,43 @@ impl LeapState {
     fn handle_matched(&mut self) {
         // TODO: matched behavior option?
         self.targets.clear();
-        _ = hide_floating_panes(None);
+        hide_floating_panes_in_active_tab();
         close_self();
     }
 
     fn handle_no_matches(&mut self) {
         match self.config.no_match_behavior {
-            NoMatchBehavior::Reset => self.reset_matching(),
+            NoMatchBehavior::Reset => {
+                self.reset_matching();
+            }
             NoMatchBehavior::Close => close_self(),
-            NoMatchBehavior::HideFloatingPanes => _ = hide_floating_panes(None),
+            NoMatchBehavior::HideFloatingPanes => hide_floating_panes_in_active_tab(),
         }
     }
 
     fn handle_escape(&mut self) -> bool {
-        // TODO: "reset_or_close" | "reset_or_hide_floating"?
-
-        if self
-            .targets
-            .iter()
-            .any(|target| !matches!(target.name.state(), MatchingState::Pending))
-        {
-            self.reset_matching();
-            return true;
-        }
-
         match self.config.escape_behavior {
-            EscapeBehavior::Close => close_self(),
-            EscapeBehavior::HideFloatingPanes => _ = hide_floating_panes(None),
+            EscapeBehavior::Close => {
+                close_self();
+                false
+            }
+            EscapeBehavior::ResetOrClose => {
+                self.reset_matching() || {
+                    close_self();
+                    false
+                }
+            }
+            EscapeBehavior::HideFloatingPanes => {
+                hide_floating_panes_in_active_tab();
+                false
+            }
+            EscapeBehavior::ResetOrHideFloatingPanes => {
+                self.reset_matching() || {
+                    hide_floating_panes_in_active_tab();
+                    false
+                }
+            }
         }
-
-        false
     }
 
     fn assign_tab_targets<'a>(
@@ -473,12 +477,17 @@ impl LeapState {
         Some((TabIndex(tab_index), focused_pane_id))
     }
 
-    fn reset_matching(&mut self) {
+    fn reset_matching(&mut self) -> bool {
+        let mut did_reset = false;
+
         self.manual_selection = None;
         for target in self.targets.iter_mut() {
+            did_reset = did_reset || !matches!(target.name.state(), MatchingState::Pending);
             target.being_matched.reset();
             target.name.reset();
         }
+
+        did_reset
     }
 
     fn text_width(str: &str) -> usize {

@@ -1,4 +1,4 @@
-mod leap_config;
+mod config;
 mod matching;
 mod utils;
 
@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 use zellij_tile::prelude::*;
 
-use crate::leap_config::*;
+use crate::config::*;
 use crate::matching::*;
 use crate::utils::*;
 

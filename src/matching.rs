@@ -3,10 +3,17 @@ pub struct MatchedString {
     state: MatchingState,
 }
 
+#[derive(Default)]
 pub enum MatchingState {
+    #[default]
     Pending,
-    Anchors { anchors: Vec<(usize, char)> },
-    Found { start: usize, len: usize },
+    Anchors {
+        anchors: Vec<(usize, char)>,
+    },
+    Found {
+        start: usize,
+        len: usize,
+    },
     None,
 }
 
@@ -20,7 +27,7 @@ impl MatchedString {
     pub fn new(string: String) -> Self {
         Self {
             string,
-            state: MatchingState::Pending,
+            state: MatchingState::default(),
         }
     }
 
@@ -116,7 +123,7 @@ impl MatchedString {
     }
 
     pub fn reset(&mut self) {
-        self.state = MatchingState::Pending;
+        self.state = MatchingState::default();
     }
 }
 

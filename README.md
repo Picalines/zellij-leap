@@ -28,10 +28,11 @@ keybinds {
         bind "Space" {
             LaunchOrFocusPlugin "leap" {
                 floating true
-                leap_target "tab"           // Target. See "Targets" section below
-                leap_on_no_match "reset"    // Behavior when no match found: "reset", "close", or "hide_floating_panes"
-                leap_on_pane_unfocus "none" // Behavior when pane loses focus: "none" or "close"
-                leap_on_escape "close"      // Behavior on escape key: "close" or "hide_floating_panes"
+                // Defaults:
+                leap_target "tab"
+                leap_on_no_match "reset"
+                leap_on_pane_unfocus "none"
+                leap_on_escape "close"
             }
             SwitchToMode "normal";
         }
@@ -49,11 +50,20 @@ keybinds {
 
 ## Special keys
 
-- `Esc` - Reset current matching, or close/hide the plugin if nothing is being matched
+Sometimes one character isn't enough to find a unique match - in that case you'll be prompted to type more characters. If the sequence is too long you can use manual selection
+
+- `Esc` - Reset current matching, or close/hide the plugin if nothing is being matched (depending on `leap_on_escape`)
 - `Up` / `Ctrl-k` / `Ctrl-p` - Move selection up manually. Useful when you have targets with very similar names
 - `Down` / `Ctrl-j` / `Ctrl-n` - Move selection down
 - `Enter` - Jump to the currently selected target (indicated by `»` or `>` sign)
 - `Ctrl-u` - Reset current matching
+
+## Options
+
+- `leap_target` - see "Targets" section
+- `leap_on_no_match` - behavior when no match found: `reset`, `close`, or `hide_floating_panes`
+- `leap_on_pane_unfocus` - behavior when pane loses focus: `none` or `close`
+- `leap_on_escape` - behavior of escape key: `close`, `reset_or_close` , `hide_floating_panes` or `reset_or_hide_floating_panes`
 
 ## Matching algorithm
 

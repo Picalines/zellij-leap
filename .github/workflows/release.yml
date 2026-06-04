@@ -31,7 +31,6 @@ jobs:
       - name: Create Release
         uses: ncipollo/release-action@v1.21.0
         with:
-          allowUpdates: true
           commit: main
           tag: v${{ steps.metadata.outputs.package_version }}
           omitBodyDuringUpdate: true
@@ -39,4 +38,5 @@ jobs:
           draft: true
           prerelease: false
           generateReleaseNotes: true
-          skipIfReleaseExists: true
+          allowUpdates: true
+          updateOnlyUnreleased: true

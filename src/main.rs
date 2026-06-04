@@ -13,9 +13,18 @@ use crate::utils::*;
 
 #[derive(Clone)]
 enum LeapLocation {
-    Tab(TabIndex),
-    Pane(PaneId),
-    Session(SessionName),
+    Tab {
+        tab_index: TabIndex,
+    },
+    Pane {
+        pane_id: PaneId,
+        is_floating: bool,
+        is_suppressed: bool,
+    },
+    Session {
+        session_name: SessionName,
+        is_alive: bool,
+    },
 }
 
 enum MoveSelectionDirection {
@@ -94,8 +103,8 @@ impl ZellijPlugin for LeapState {
             },
         };
 
-        // I wanted this code to not allocate, so beware:
-        // we calculate size of UI before rendering it
+        // I wanted this code to not allocate, so beware: we calculate size of UI before rendering
+        // it. This is kinda required, because it's hard to calculate a width of Styled strings
 
         // (1 for hint_text)
         debug_assert_eq!(hint_text.lines().count(), 1);
@@ -118,7 +127,13 @@ impl ZellijPlugin for LeapState {
             .max(
                 self.targets
                     .iter()
-                    .map(|target| prefix_width + Self::text_width(target.name.str()))
+                    .map(|target| {
+                        prefix_width
+                            + Self::text_width(target.name.str())
+                            + Self::render_target_detail(target)
+                                .map(Self::text_width)
+                                .unwrap_or(0)
+                    })
                     .max()
                     .unwrap_or(0),
             );
@@ -135,10 +150,10 @@ impl ZellijPlugin for LeapState {
 
         let selection_index = self.assumed_selection();
 
-        for (index, target) in self.targets.iter().enumerate() {
+        for (target_index, target) in self.targets.iter().enumerate() {
             print_left_padding();
 
-            let prefix = match (target.current, selection_index == Some(index)) {
+            let prefix = match (target.current, selection_index == Some(target_index)) {
                 (true, true) => "» ".green().into_styled(),
                 (false, true) => "> ".green().into_styled(),
                 (true, false) => "- ".dimmed().into_styled(),
@@ -147,19 +162,25 @@ impl ZellijPlugin for LeapState {
             debug_assert_eq!(Self::text_width(prefix.inner()), prefix_width);
             print!("{}", prefix);
 
+            let detail = Self::render_target_detail(target).unwrap_or("");
+
             if !target.being_matched.current {
-                println!("{}", target.name.str().dimmed().strikethrough());
+                println!(
+                    "{}{}",
+                    target.name.str().dimmed().strikethrough(),
+                    detail.dimmed().strikethrough()
+                );
                 continue;
             }
 
             if matches!(target.name.state(), MatchingState::Pending) {
-                println!("{}", target.name.str());
+                println!("{}{}", target.name.str(), detail.dimmed());
                 continue;
             }
 
-            for (i, (part_kind, part)) in target.name.parts().enumerate() {
+            for (part_index, (part_kind, part)) in target.name.parts().enumerate() {
                 match part_kind {
-                    MatchingPart::String if i == 0 => print!("{}", part.dimmed()),
+                    MatchingPart::String if part_index == 0 => print!("{}", part.dimmed()),
                     MatchingPart::String => {
                         let (first_char, rest) = part.split_at(1);
                         print!("{}{}", first_char, rest.dimmed());
@@ -169,7 +190,7 @@ impl ZellijPlugin for LeapState {
                 }
             }
 
-            println!();
+            println!("{}", detail.dimmed());
         }
     }
 }
@@ -336,9 +357,9 @@ impl LeapState {
         self.handle_matched();
 
         match leap_location {
-            LeapLocation::Tab(tab_index) => switch_tab_to((*tab_index).0 as u32 + 1),
-            LeapLocation::Pane(pane_id) => focus_pane_with_id(*pane_id, false, false),
-            LeapLocation::Session(session_name) => switch_session(Some(&session_name.0)),
+            LeapLocation::Tab { tab_index, .. } => switch_tab_to((*tab_index).0 as u32 + 1),
+            LeapLocation::Pane { pane_id, .. } => focus_pane_with_id(*pane_id, false, false),
+            LeapLocation::Session { session_name, .. } => switch_session(Some(&session_name.0)),
         }
     }
 
@@ -394,7 +415,9 @@ impl LeapState {
                 name: MatchedString::new(tab.name.clone()),
                 being_matched: Resettable::new(!tab.active || match_active),
                 current: tab.active,
-                location: LeapLocation::Tab(TabIndex(tab.position)),
+                location: LeapLocation::Tab {
+                    tab_index: TabIndex(tab.position),
+                },
             })
             .collect();
     }
@@ -415,7 +438,11 @@ impl LeapState {
                     name: MatchedString::new(pane.title.clone()),
                     being_matched: Resettable::new(true),
                     current: false,
-                    location: LeapLocation::Pane(pane_id_from_pane(pane)),
+                    location: LeapLocation::Pane {
+                        pane_id: pane_id_from_pane(pane),
+                        is_floating: pane.is_floating,
+                        is_suppressed: pane.is_suppressed,
+                    },
                 })
             })
             .collect();
@@ -430,16 +457,19 @@ impl LeapState {
         struct SessionTargetInfo {
             name: SessionName,
             is_current: bool,
+            is_alive: bool,
         }
 
         let session_targets = live_sessions
             .map(|session| SessionTargetInfo {
                 name: SessionName(session.name.clone()),
                 is_current: session.is_current_session,
+                is_alive: true,
             })
             .chain(resurrectable_sessions.map(|(name, _)| SessionTargetInfo {
                 name: SessionName(name.clone()),
                 is_current: false,
+                is_alive: false,
             }));
 
         self.targets = session_targets
@@ -447,7 +477,10 @@ impl LeapState {
                 name: MatchedString::new(session.name.0.clone()),
                 being_matched: Resettable::new(!session.is_current || match_current),
                 current: session.is_current,
-                location: LeapLocation::Session(session.name),
+                location: LeapLocation::Session {
+                    session_name: session.name,
+                    is_alive: session.is_alive,
+                },
             })
             .collect();
     }
@@ -492,6 +525,29 @@ impl LeapState {
 
     fn text_width(str: &str) -> usize {
         str.chars().count()
+    }
+
+    fn render_target_detail(target: &LeapTarget) -> Option<&str> {
+        let target_detail = match target.location {
+            LeapLocation::Pane {
+                is_suppressed,
+                is_floating,
+                ..
+            } => match (is_suppressed, is_floating) {
+                (true, true) => " (suppressed) (floating)",
+                (true, false) => " (suppressed)",
+                (false, true) => " (floating)",
+                (false, false) => return None,
+            },
+            LeapLocation::Session {
+                is_alive: false, ..
+            } => " (resurrect)",
+            _ => return None,
+        };
+
+        debug_assert!(target_detail.starts_with(" "));
+
+        Some(target_detail)
     }
 
     fn start_centered_render(

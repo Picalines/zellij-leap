@@ -157,7 +157,7 @@ impl ZellijPlugin for LeapState {
                 (true, true) => "» ".green().into_styled(),
                 (false, true) => "> ".green().into_styled(),
                 (true, false) => "- ".dimmed().into_styled(),
-                _ => "  ".hidden().into_styled(),
+                _ => "  ".white().into_styled(),
             };
             debug_assert_eq!(Self::text_width(prefix.inner()), prefix_width);
             print!("{}", prefix);

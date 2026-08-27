@@ -344,12 +344,20 @@ impl LeapState {
 
         let last_index = self.targets.len() - 1;
         self.manual_selection = Some(match dir {
-            MoveSelectionDirection::Up => (target_index > 0)
-                .then(|| target_index - 1)
-                .unwrap_or(last_index),
-            MoveSelectionDirection::Down => (target_index < last_index)
-                .then(|| target_index + 1)
-                .unwrap_or(0),
+            MoveSelectionDirection::Up => {
+                if target_index > 0 {
+                    target_index - 1
+                } else {
+                    last_index
+                }
+            }
+            MoveSelectionDirection::Down => {
+                if target_index < last_index {
+                    target_index + 1
+                } else {
+                    0
+                }
+            }
         });
     }
 
@@ -357,7 +365,7 @@ impl LeapState {
         self.handle_matched();
 
         match leap_location {
-            LeapLocation::Tab { tab_index, .. } => switch_tab_to((*tab_index).0 as u32 + 1),
+            LeapLocation::Tab { tab_index, .. } => switch_tab_to(tab_index.0 as u32 + 1),
             LeapLocation::Pane { pane_id, .. } => focus_pane_with_id(*pane_id, false, false),
             LeapLocation::Session { session_name, .. } => switch_session(Some(&session_name.0)),
         }

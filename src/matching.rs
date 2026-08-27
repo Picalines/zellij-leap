@@ -147,7 +147,7 @@ impl<'a> Iterator for MatchingParts<'a> {
                 self.step = 1;
                 Some((MatchingPart::String, self.string))
             }
-            MatchingState::Anchors { anchors } => loop {
+            MatchingState::Anchors { anchors } => {
                 if self.step < anchors.len() {
                     let anchor_start = anchors[self.step].0;
 
@@ -160,18 +160,18 @@ impl<'a> Iterator for MatchingParts<'a> {
                     self.step += 1;
                     self.cursor = self.next_char_end(anchor_start);
 
-                    return Some((
+                    Some((
                         MatchingPart::Anchor,
                         &self.string[anchor_start..self.cursor],
-                    ));
+                    ))
                 } else if self.cursor < self.string.len() {
                     let part = &self.string[self.cursor..];
                     self.cursor = self.string.len();
-                    return Some((MatchingPart::String, part));
+                    Some((MatchingPart::String, part))
                 } else {
-                    return None;
+                    None
                 }
-            },
+            }
             MatchingState::Found { start, len } => {
                 let start = *start;
                 let end = start.saturating_add(*len).min(self.string.len());

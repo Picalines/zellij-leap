@@ -32,6 +32,10 @@ run = "cargo clippy"
 alias = "f"
 run = "cargo clippy --allow-dirty --fix"
 
+[tasks.verify]
+alias = "v"
+run = [{ task = "fix" }, { task = "lint" }, { task = "build" }]
+
 [tasks.run]
 alias = "r"
 depends = "build"

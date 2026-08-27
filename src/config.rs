@@ -6,6 +6,7 @@ pub struct LeapConfig {
     pub no_match_behavior: NoMatchBehavior,
     pub pane_unfocus_behavior: PaneUnfocusBehavior,
     pub escape_behavior: EscapeBehavior,
+    pub suppressed_pane_behavior: SuppressedPaneBehavior,
 }
 
 impl Default for LeapConfig {
@@ -15,6 +16,7 @@ impl Default for LeapConfig {
             no_match_behavior: NoMatchBehavior::Reset,
             pane_unfocus_behavior: PaneUnfocusBehavior::None,
             escape_behavior: EscapeBehavior::Close,
+            suppressed_pane_behavior: SuppressedPaneBehavior::Include,
         }
     }
 }
@@ -54,6 +56,14 @@ pub enum EscapeBehavior {
     ResetOrHideFloatingPanes,
 }
 
+#[derive(EnumString, EnumIter, IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum SuppressedPaneBehavior {
+    Exclude,
+    DontMatch,
+    Include,
+}
+
 impl LeapConfig {
     pub fn parse(configuration: BTreeMap<String, String>) -> Result<Self, String> {
         let default = LeapConfig::default();
@@ -74,6 +84,11 @@ impl LeapConfig {
                 &configuration,
                 "leap_on_escape",
                 default.escape_behavior,
+            )?,
+            suppressed_pane_behavior: Self::parse_str_enum(
+                &configuration,
+                "leap_suppressed_panes",
+                default.suppressed_pane_behavior,
             )?,
         })
     }

@@ -33,6 +33,7 @@ keybinds {
                 leap_on_no_match "reset"
                 leap_on_pane_unfocus "none"
                 leap_on_escape "close"
+                leap_suppressed_panes "include"
             }
             SwitchToMode "normal";
         }
@@ -64,6 +65,7 @@ Sometimes one character isn't enough to find a unique match - in that case you'l
 - `leap_on_no_match` - behavior when no match found: `reset`, `close`, or `hide_floating_panes`
 - `leap_on_pane_unfocus` - behavior when pane loses focus: `none` or `close`
 - `leap_on_escape` - behavior of escape key: `close`, `reset_or_close` , `hide_floating_panes` or `reset_or_hide_floating_panes`
+- `leap_suppressed_panes` - behavior for suppressed panes (e.g., stacked ones): `exclude` (don't show at all), `dont_match` (manual selection only), or `include`
 
 ## Matching algorithm
 

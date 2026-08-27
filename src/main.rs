@@ -437,14 +437,21 @@ impl LeapState {
             .filter_map(|pane| {
                 let is_self_plugin = pane.is_plugin && pane.id == self_plugin_id;
 
-                // TODO: config for suppressed panes?
-                if is_self_plugin || !pane.is_selectable || pane.is_suppressed {
+                if is_self_plugin || !pane.is_selectable {
                     return None;
                 }
 
+                let being_matched = !pane.is_suppressed || {
+                    match self.config.suppressed_pane_behavior {
+                        SuppressedPaneBehavior::Exclude => return None,
+                        SuppressedPaneBehavior::DontMatch => false,
+                        SuppressedPaneBehavior::Include => true,
+                    }
+                };
+
                 Some(LeapTarget {
                     name: MatchedString::new(pane.title.clone()),
-                    being_matched: Resettable::new(true),
+                    being_matched: Resettable::new(being_matched),
                     current: false,
                     location: LeapLocation::Pane {
                         pane_id: pane_id_from_pane(pane),

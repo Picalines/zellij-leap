@@ -151,22 +151,39 @@ impl LeapState {
     }
 
     fn handle_key(&mut self, key: KeyWithModifier) -> bool {
-        let has_ctrl = key.has_modifiers(&[KeyModifier::Ctrl]);
-        let no_mods = key.key_modifiers.is_empty();
+        enum Mods {
+            None,
+            Ctrl,
+            Shift,
+        }
 
-        match (key.bare_key, has_ctrl) {
+        let mods = match () {
+            _ if key.has_modifiers(&[KeyModifier::Ctrl]) => Mods::Ctrl,
+            _ if key.has_modifiers(&[KeyModifier::Shift]) => Mods::Shift,
+            _ => Mods::None,
+        };
+
+        match (key.bare_key, mods) {
             (BareKey::Esc, _) => self.handle_escape(),
             (BareKey::Enter, _) => self.handle_enter(),
-            (BareKey::Up, _) | (BareKey::Char('k' | 'p'), true) => {
+            (BareKey::Tab, Mods::None) => {
+                self.move_selection_to_next_match(SequenceDirection::Next);
+                true
+            }
+            (BareKey::Tab, Mods::Shift) => {
+                self.move_selection_to_next_match(SequenceDirection::Prev);
+                true
+            }
+            (BareKey::Up, _) | (BareKey::Char('k' | 'p'), Mods::Ctrl) => {
                 self.move_manual_selection(SequenceDirection::Prev);
                 true
             }
-            (BareKey::Down, _) | (BareKey::Char('j' | 'n'), true) => {
+            (BareKey::Down, _) | (BareKey::Char('j' | 'n'), Mods::Ctrl) => {
                 self.move_manual_selection(SequenceDirection::Next);
                 true
             }
-            (BareKey::Char('u'), true) => self.reset_matching(),
-            (BareKey::Char(ch), _) if no_mods => {
+            (BareKey::Char('u'), Mods::Ctrl) => self.reset_matching(),
+            (BareKey::Char(ch), Mods::None) => {
                 self.handle_char_key(ch);
                 true
             }
@@ -222,23 +239,22 @@ impl LeapState {
             return;
         };
 
-        let last_index = self.targets.len() - 1;
-        self.manual_selection = Some(match dir {
-            SequenceDirection::Prev => {
-                if target_index > 0 {
-                    target_index - 1
-                } else {
-                    last_index
-                }
-            }
-            SequenceDirection::Next => {
-                if target_index < last_index {
-                    target_index + 1
-                } else {
-                    0
-                }
-            }
+        self.manual_selection = Some(dir.advance_index(target_index, self.targets.len()));
+    }
+
+    fn move_selection_to_next_match(&mut self, dir: SequenceDirection) {
+        let Some(mut selection_index) = self.assumed_selection() else {
+            return;
+        };
+
+        let matched_index = (0..self.targets.len()).find_map(|_| {
+            selection_index = dir.advance_index(selection_index, self.targets.len());
+            self.targets[selection_index]
+                .being_matched
+                .current
+                .then_some(selection_index)
         });
+        self.manual_selection = matched_index.or(self.manual_selection);
     }
 
     fn switch_to_location(&mut self, leap_location: &LeapLocation) {

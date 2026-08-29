@@ -54,6 +54,7 @@ keybinds {
 Sometimes one character isn't enough to find a unique match - in that case you'll be prompted to type more characters. If the sequence is too long you can use manual selection
 
 - `Esc` - Reset current matching, or close/hide the plugin if nothing is being matched (depending on `leap_on_escape`)
+- `Tab` / `Shift-Tab` - Move selection to the next / previous target still being matched
 - `Up` / `Ctrl-k` / `Ctrl-p` - Move selection up manually. Useful when you have targets with very similar names
 - `Down` / `Ctrl-j` / `Ctrl-n` - Move selection down
 - `Enter` - Jump to the currently selected target (indicated by `»` or `>` sign)

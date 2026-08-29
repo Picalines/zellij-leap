@@ -327,12 +327,24 @@ impl LeapState {
 
     fn pane_targets<'a>(&self, panes: impl Iterator<Item = &'a PaneInfo>) -> Vec<LeapTarget> {
         let self_plugin_id = get_plugin_ids().plugin_id;
+        let self_plugin_url = self.last_panes.as_ref().and_then(|pane_manifest| {
+            pane_manifest
+                .panes
+                .values()
+                .flatten()
+                .find(|pane| pane.is_plugin && pane.id == self_plugin_id)
+                .and_then(|pane| pane.plugin_url.as_deref())
+        });
 
         panes
             .filter_map(|pane| {
-                let is_self_plugin = pane.is_plugin && pane.id == self_plugin_id;
+                let is_leap_plugin = pane.is_plugin
+                    && (pane.id == self_plugin_id
+                        || self_plugin_url.is_some_and(|plugin_url| {
+                            pane.plugin_url.as_deref() == Some(plugin_url)
+                        }));
 
-                if is_self_plugin || !pane.is_selectable {
+                if is_leap_plugin || !pane.is_selectable {
                     return None;
                 }
 

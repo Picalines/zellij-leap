@@ -416,12 +416,24 @@ impl LeapState {
 
     fn refresh_pane_focus(&mut self) {
         let plugin_id = get_plugin_ids().plugin_id;
-        let is_pane_focused = self.last_panes.as_ref().is_some_and(|pane_manifest| {
-            pane_manifest
-                .panes
-                .values()
-                .flatten()
-                .any(|pane| pane.is_plugin && pane.id == plugin_id && pane.is_focused)
+        let active_tab = self
+            .last_tabs
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .find(|tab| tab.active);
+        let is_pane_focused = active_tab.is_some_and(|tab| {
+            self.last_panes
+                .as_ref()
+                .and_then(|manifest| manifest.panes.get(&tab.position))
+                .is_some_and(|panes| {
+                    panes.iter().any(|pane| {
+                        pane.is_plugin
+                            && pane.id == plugin_id
+                            && pane.is_focused
+                            && pane.is_floating == tab.are_floating_panes_visible
+                    })
+                })
         });
 
         if self.is_pane_focused && !is_pane_focused {

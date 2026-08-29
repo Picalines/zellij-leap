@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+#MISE description="Point the active Zellij config at the debug WASM"
+#MISE depends=["build"]
+
+set -euo pipefail
+
+config_file="$(zellij setup --check | sed -n 's/^\[LOOKING FOR CONFIG FILE FROM\]: "\(.*\)"$/\1/p')"
+
+if [[ -z "$config_file" || ! -f "$config_file" ]]; then
+    echo "Could not find the active Zellij config file" >&2
+    exit 1
+fi
+
+temporary_file="$(mktemp "${config_file}.XXXXXX")"
+trap 'rm -f "$temporary_file"' EXIT
+
+awk -v debug_wasm_url="$DEBUG_WASM_URL" '
+    {
+        is_debug_plugin = $0 ~ /^[[:space:]]*LaunchOrFocusPlugin[[:space:]]/ && $0 ~ /zellij-leap/
+
+        if (in_debug_plugin && $0 ~ /^[[:space:]]*skip_plugin_cache[[:space:]]/) {
+            next
+        }
+
+        result = ""
+        remaining = $0
+
+        while (match(remaining, /"[^"]*zellij-leap[^"]*"/)) {
+            result = result substr(remaining, 1, RSTART - 1) "\"" debug_wasm_url "\""
+            remaining = substr(remaining, RSTART + RLENGTH)
+        }
+
+        print result remaining
+
+        if (is_debug_plugin) {
+            indentation = $0
+            sub(/[^[:space:]].*$/, "", indentation)
+            print indentation "    skip_plugin_cache true"
+            debug_plugin_indentation = length(indentation)
+            in_debug_plugin = 1
+            next
+        }
+
+        indentation = $0
+        sub(/[^[:space:]].*$/, "", indentation)
+        if (in_debug_plugin && length(indentation) == debug_plugin_indentation && $0 ~ /^[[:space:]]*}/) {
+            in_debug_plugin = 0
+        }
+    }
+' "$config_file" > "$temporary_file"
+
+cp "$temporary_file" "$config_file"
+
+echo "Updated $config_file to use $DEBUG_WASM_URL"
+
+if [[ -n "${ZELLIJ_SESSION_NAME:-}" ]]; then
+    zellij action list-panes --all |
+        awk -v debug_wasm_url="$DEBUG_WASM_URL" '
+            index($0, debug_wasm_url) {
+                for (field = 1; field <= NF; field++) {
+                    if ($field ~ /^plugin_[0-9]+$/) {
+                        print $field
+                        break
+                    }
+                }
+            }
+        ' |
+        while IFS= read -r plugin_pane_id; do
+            zellij action close-pane --pane-id "$plugin_pane_id"
+            echo "Closed stale $plugin_pane_id in $ZELLIJ_SESSION_NAME"
+        done
+fi

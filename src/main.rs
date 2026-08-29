@@ -27,9 +27,9 @@ enum LeapLocation {
     },
 }
 
-enum MoveSelectionDirection {
-    Up,
-    Down,
+enum SequenceDirection {
+    Prev,
+    Next,
 }
 
 struct LeapTarget {
@@ -278,11 +278,11 @@ impl LeapState {
             (BareKey::Esc, _) => self.handle_escape(),
             (BareKey::Enter, _) => self.handle_enter(),
             (BareKey::Up, _) | (BareKey::Char('k' | 'p'), true) => {
-                self.move_manual_selection(MoveSelectionDirection::Up);
+                self.move_manual_selection(SequenceDirection::Prev);
                 true
             }
             (BareKey::Down, _) | (BareKey::Char('j' | 'n'), true) => {
-                self.move_manual_selection(MoveSelectionDirection::Down);
+                self.move_manual_selection(SequenceDirection::Next);
                 true
             }
             (BareKey::Char('u'), true) => self.reset_matching(),
@@ -337,21 +337,21 @@ impl LeapState {
         }
     }
 
-    fn move_manual_selection(&mut self, dir: MoveSelectionDirection) {
+    fn move_manual_selection(&mut self, dir: SequenceDirection) {
         let Some(target_index) = self.assumed_selection() else {
             return;
         };
 
         let last_index = self.targets.len() - 1;
         self.manual_selection = Some(match dir {
-            MoveSelectionDirection::Up => {
+            SequenceDirection::Prev => {
                 if target_index > 0 {
                     target_index - 1
                 } else {
                     last_index
                 }
             }
-            MoveSelectionDirection::Down => {
+            SequenceDirection::Next => {
                 if target_index < last_index {
                     target_index + 1
                 } else {

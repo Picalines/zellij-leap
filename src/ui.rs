@@ -102,7 +102,8 @@ pub fn render(state: &LeapState, rows: usize, cols: usize) {
             match part_kind {
                 MatchingPart::String if part_index == 0 => print!("{}", part.dimmed()),
                 MatchingPart::String => {
-                    let (first_char, rest) = part.split_at(1);
+                    let first_char_len = part.chars().next().map(char::len_utf8).unwrap_or(0);
+                    let (first_char, rest) = part.split_at(first_char_len);
                     print!("{}{}", first_char, rest.dimmed());
                 }
                 MatchingPart::Anchor => print!("{}", part.yellow()),

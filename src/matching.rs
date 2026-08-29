@@ -52,20 +52,23 @@ impl MatchedString {
         match self.state {
             MatchingState::None => false,
             MatchingState::Pending => {
-                let anchors: Vec<(usize, Option<char>)> = self
+                let anchors: Vec<(usize, usize, Option<char>)> = self
                     .string
-                    .to_ascii_lowercase()
-                    .match_indices(ch.to_ascii_lowercase())
-                    .map(|(i, _)| (i, self.string.chars().nth(i + 1)))
+                    .char_indices()
+                    .filter(|(_, fch)| case_insensitive_equal(*fch, ch))
+                    .map(|(start, fch)| {
+                        let end = start + fch.len_utf8();
+                        (start, end, self.string[end..].chars().next())
+                    })
                     .collect();
 
                 let (has_moved, next_state) = match &anchors[..] {
                     [] => (false, MatchingState::None),
-                    [(end_index, _)] => (
+                    [(start, end, _)] => (
                         true,
                         MatchingState::Found {
-                            start: *end_index,
-                            len: 1,
+                            start: *start,
+                            len: end - start,
                         },
                     ),
                     _ => (
@@ -73,8 +76,8 @@ impl MatchedString {
                         MatchingState::Anchors {
                             anchors: anchors
                                 .iter()
-                                .filter_map(|(i, next_char)| {
-                                    next_char.and_then(|c| Some((*i, c.to_ascii_lowercase())))
+                                .filter_map(|(start, _, next_char)| {
+                                    next_char.map(|next_char| (*start, next_char))
                                 })
                                 .collect(),
                         },
@@ -85,15 +88,21 @@ impl MatchedString {
                 has_moved
             }
             MatchingState::Anchors { ref anchors } => {
-                let ch_lower = ch.to_ascii_lowercase();
-                let matched_anchor = anchors.iter().find(|(_, next_char)| *next_char == ch_lower);
+                let matched_anchor = anchors
+                    .iter()
+                    .find(|(_, next_char)| case_insensitive_equal(*next_char, ch));
 
                 match matched_anchor {
                     None => false,
-                    Some((start, _)) => {
+                    Some((start, next_char)) => {
+                        let first_char_len = self.string[*start..]
+                            .chars()
+                            .next()
+                            .map(char::len_utf8)
+                            .unwrap_or(0);
                         self.state = MatchingState::Found {
                             start: *start,
-                            len: 2,
+                            len: first_char_len + next_char.len_utf8(),
                         };
                         true
                     }
@@ -104,16 +113,14 @@ impl MatchedString {
                     return false;
                 }
 
-                let (_, from_start) = self.string.split_at(start);
-                let (_, after_match) = from_start.split_at(len);
-
-                let matches = after_match.starts_with(ch.to_ascii_lowercase())
-                    || after_match.starts_with(ch.to_ascii_uppercase());
+                let after_match = &self.string[start + len..];
+                let next_char = after_match.chars().next().unwrap();
+                let matches = case_insensitive_equal(next_char, ch);
 
                 if matches {
                     self.state = MatchingState::Found {
                         start,
-                        len: len + 1,
+                        len: len + next_char.len_utf8(),
                     };
                 }
 
@@ -125,6 +132,10 @@ impl MatchedString {
     pub fn reset(&mut self) {
         self.state = MatchingState::default();
     }
+}
+
+fn case_insensitive_equal(left: char, right: char) -> bool {
+    left.to_lowercase().eq(right.to_lowercase())
 }
 
 pub struct MatchingParts<'a> {

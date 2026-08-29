@@ -69,61 +69,84 @@ impl LeapState {
                         true
                     }
                     Ok(sessions) => {
-                        let match_current = matches!(self.config.target, LeapTargetKind::Session);
-                        self.manual_selection = None;
-                        self.assign_session_targets(
-                            sessions.live_sessions.iter(),
-                            sessions.resurrectable_sessions.iter(),
-                            match_current,
-                        );
-                        true
+                        self.last_sessions = Some(sessions);
+                        self.refresh()
                     }
                 }
             }
-            _ => false,
+            _ => self.refresh(),
         }
     }
 
     fn handle_tab_update(&mut self, tabs: Vec<TabInfo>) -> bool {
-        if self.is_pane_focused && !self.targets.is_empty() {
-            return false;
-        }
-
-        match self.config.target {
-            LeapTargetKind::Tab => {
-                self.manual_selection = None;
-                self.assign_tab_targets(tabs.iter(), true);
-                true
-            }
-            LeapTargetKind::TabExceptActive => {
-                self.manual_selection = None;
-                self.assign_tab_targets(tabs.iter(), false);
-                true
-            }
-            _ => false,
-        }
+        self.last_tabs = Some(tabs);
+        self.refresh()
     }
 
     fn handle_pane_update(&mut self, panes: PaneManifest) -> bool {
-        let Some((focused_tab_index, _)) = self.handle_focus_state() else {
-            return false;
-        };
+        self.last_panes = Some(panes);
+        self.refresh()
+    }
+
+    fn refresh(&mut self) -> bool {
+        self.refresh_pane_focus();
 
         if self.is_pane_focused && !self.targets.is_empty() {
             return false;
         }
 
-        match self.config.target {
-            LeapTargetKind::PaneInActiveTab => {
-                let Some(panes) = panes.panes.get(&focused_tab_index.0) else {
-                    return false;
-                };
+        self.manual_selection = None;
+        self.targets = self.collect_targets();
+        true
+    }
 
-                self.manual_selection = None;
-                self.assign_pane_targets(panes.iter());
-                true
+    fn collect_targets(&self) -> Vec<LeapTarget> {
+        match self.config.target {
+            LeapTargetKind::Tab | LeapTargetKind::TabExceptActive => {
+                let match_active = matches!(self.config.target, LeapTargetKind::Tab);
+                let tabs = self.last_tabs.as_deref().unwrap_or_default();
+                self.tab_targets(tabs.iter(), match_active)
             }
-            _ => false,
+            LeapTargetKind::PaneInActiveTab => {
+                let active_tab_position = self
+                    .last_tabs
+                    .as_deref()
+                    .unwrap_or_default()
+                    .iter()
+                    .find(|tab| tab.active)
+                    .map(|tab| tab.position);
+
+                let panes = active_tab_position
+                    .and_then(|tab_position| {
+                        self.last_panes
+                            .as_ref()?
+                            .panes
+                            .get(&tab_position)
+                            .map(Vec::as_slice)
+                    })
+                    .unwrap_or_default();
+
+                self.pane_targets(panes.iter())
+            }
+            LeapTargetKind::Session | LeapTargetKind::SessionExceptCurrent => {
+                let match_current = matches!(self.config.target, LeapTargetKind::Session);
+                let (live_sessions, resurrectable_sessions) = self
+                    .last_sessions
+                    .as_ref()
+                    .map(|sessions| {
+                        (
+                            sessions.live_sessions.as_slice(),
+                            sessions.resurrectable_sessions.as_slice(),
+                        )
+                    })
+                    .unwrap_or_default();
+
+                self.session_targets(
+                    live_sessions.iter(),
+                    resurrectable_sessions.iter(),
+                    match_current,
+                )
+            }
         }
     }
 
@@ -270,27 +293,26 @@ impl LeapState {
         }
     }
 
-    fn assign_tab_targets<'a>(
-        &mut self,
+    fn tab_targets<'a>(
+        &self,
         tabs: impl Iterator<Item = &'a TabInfo>,
         match_active: bool,
-    ) {
-        self.targets = tabs
-            .map(|tab| LeapTarget {
-                name: MatchedString::new(tab.name.clone()),
-                being_matched: Resettable::new(!tab.active || match_active),
-                current: tab.active,
-                location: LeapLocation::Tab {
-                    tab_index: TabIndex(tab.position),
-                },
-            })
-            .collect();
+    ) -> Vec<LeapTarget> {
+        tabs.map(|tab| LeapTarget {
+            name: MatchedString::new(tab.name.clone()),
+            being_matched: Resettable::new(!tab.active || match_active),
+            current: tab.active,
+            location: LeapLocation::Tab {
+                tab_index: TabIndex(tab.position),
+            },
+        })
+        .collect()
     }
 
-    fn assign_pane_targets<'a>(&mut self, panes: impl Iterator<Item = &'a PaneInfo>) {
+    fn pane_targets<'a>(&self, panes: impl Iterator<Item = &'a PaneInfo>) -> Vec<LeapTarget> {
         let self_plugin_id = get_plugin_ids().plugin_id;
 
-        self.targets = panes
+        panes
             .filter_map(|pane| {
                 let is_self_plugin = pane.is_plugin && pane.id == self_plugin_id;
 
@@ -317,15 +339,15 @@ impl LeapState {
                     },
                 })
             })
-            .collect();
+            .collect()
     }
 
-    fn assign_session_targets<'a, 'b>(
-        &mut self,
+    fn session_targets<'a, 'b>(
+        &self,
         live_sessions: impl Iterator<Item = &'a SessionInfo>,
         resurrectable_sessions: impl Iterator<Item = &'b (String, Duration)>,
         match_current: bool,
-    ) {
+    ) -> Vec<LeapTarget> {
         struct SessionTargetInfo {
             name: SessionName,
             is_current: bool,
@@ -344,7 +366,7 @@ impl LeapState {
                 is_alive: false,
             }));
 
-        self.targets = session_targets
+        session_targets
             .map(|session| LeapTarget {
                 name: MatchedString::new(session.name.0.clone()),
                 being_matched: Resettable::new(!session.is_current || match_current),
@@ -354,7 +376,7 @@ impl LeapState {
                     is_alive: session.is_alive,
                 },
             })
-            .collect();
+            .collect()
     }
 
     fn assumed_selection(&self) -> Option<usize> {
@@ -364,22 +386,24 @@ impl LeapState {
             .filter(|index| *index < self.targets.len())
     }
 
-    fn handle_focus_state(&mut self) -> Option<(TabIndex, PaneId)> {
-        let (tab_index, focused_pane_id) = get_focused_pane_info().ok()?;
-
+    fn refresh_pane_focus(&mut self) {
         let plugin_id = get_plugin_ids().plugin_id;
-        let is_focused = focused_pane_id == PaneId::Plugin(plugin_id);
+        let is_pane_focused = self.last_panes.as_ref().is_some_and(|pane_manifest| {
+            pane_manifest
+                .panes
+                .values()
+                .flatten()
+                .any(|pane| pane.is_plugin && pane.id == plugin_id && pane.is_focused)
+        });
 
-        if self.is_pane_focused && !is_focused {
+        if self.is_pane_focused && !is_pane_focused {
             match self.config.pane_unfocus_behavior {
                 PaneUnfocusBehavior::None => (),
                 PaneUnfocusBehavior::Close => close_self(),
             }
         }
 
-        self.is_pane_focused = is_focused;
-
-        Some((TabIndex(tab_index), focused_pane_id))
+        self.is_pane_focused = is_pane_focused;
     }
 
     fn reset_matching(&mut self) -> bool {

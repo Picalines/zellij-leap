@@ -34,6 +34,9 @@ pub struct LeapState {
     pub config: LeapConfig,
     pub targets: Vec<LeapTarget>,
     pub manual_selection: Option<usize>,
+    pub last_panes: Option<PaneManifest>,
+    pub last_tabs: Option<Vec<TabInfo>>,
+    pub last_sessions: Option<SessionListSnapshot>,
     pub is_pane_focused: bool,
     pub error: Option<String>,
 }

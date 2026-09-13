@@ -205,7 +205,9 @@ impl LeapState {
                 continue;
             }
 
-            if target.name.match_char(ch) {
+            let end_matched = target.name.is_end_reached() && ch == END_MATCH_CHAR;
+
+            if end_matched || target.name.match_char(ch) {
                 number_of_matches += 1;
                 first_matched_index = first_matched_index.or(Some(index));
                 last_matched_location = Some(target.location.clone());
@@ -450,7 +452,7 @@ impl LeapState {
 
         self.manual_selection = None;
         for target in self.targets.iter_mut() {
-            did_reset = did_reset || !matches!(target.name.state(), MatchingState::Pending);
+            did_reset = did_reset || !target.name.is_pending();
             target.being_matched.reset();
             target.name.reset();
         }

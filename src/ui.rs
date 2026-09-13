@@ -93,7 +93,7 @@ pub fn render(state: &LeapState, rows: usize, cols: usize) {
             continue;
         }
 
-        if matches!(target.name.state(), MatchingState::Pending) {
+        if target.name.is_pending() {
             println!("{}{}", target.name.str(), detail.dimmed());
             continue;
         }
@@ -109,6 +109,10 @@ pub fn render(state: &LeapState, rows: usize, cols: usize) {
                 MatchingPart::Anchor => print!("{}", part.yellow()),
                 MatchingPart::Match => print!("{}", part.green()),
             }
+        }
+
+        if target.name.is_end_reached() {
+            print!("{}", END_MATCH_CHAR.white().underline());
         }
 
         println!("{}", detail.dimmed());

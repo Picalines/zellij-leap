@@ -36,6 +36,8 @@ pub enum LeapLocation {
     },
 }
 
+pub const END_MATCH_CHAR: char = ' ';
+
 pub enum SequenceDirection {
     Prev,
     Next,

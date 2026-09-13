@@ -4,7 +4,7 @@ pub struct MatchedString {
 }
 
 #[derive(Default)]
-pub enum MatchingState {
+enum MatchingState {
     #[default]
     Pending,
     Anchors {
@@ -13,14 +13,9 @@ pub enum MatchingState {
     Found {
         start: usize,
         len: usize,
+        end_reached: bool,
     },
     None,
-}
-
-pub enum MatchingPart {
-    String,
-    Anchor,
-    Match,
 }
 
 impl MatchedString {
@@ -33,10 +28,6 @@ impl MatchedString {
 
     pub fn str(&self) -> &str {
         &self.string
-    }
-
-    pub fn state(&self) -> &MatchingState {
-        &self.state
     }
 
     pub fn parts(&self) -> MatchingParts<'_> {
@@ -69,6 +60,7 @@ impl MatchedString {
                         MatchingState::Found {
                             start: *start,
                             len: end - start,
+                            end_reached: *end == self.string.len(),
                         },
                     ),
                     _ => (
@@ -100,16 +92,22 @@ impl MatchedString {
                             .next()
                             .map(char::len_utf8)
                             .unwrap_or(0);
+                        let len = first_char_len + next_char.len_utf8();
                         self.state = MatchingState::Found {
                             start: *start,
-                            len: first_char_len + next_char.len_utf8(),
+                            len,
+                            end_reached: *start + len == self.string.len(),
                         };
                         true
                     }
                 }
             }
-            MatchingState::Found { start, len } => {
-                if start + len == self.string.len() {
+            MatchingState::Found {
+                start,
+                len,
+                end_reached,
+            } => {
+                if end_reached {
                     return false;
                 }
 
@@ -118,9 +116,11 @@ impl MatchedString {
                 let matches = case_insensitive_equal(next_char, ch);
 
                 if matches {
+                    let len = len + next_char.len_utf8();
                     self.state = MatchingState::Found {
                         start,
-                        len: len + next_char.len_utf8(),
+                        len,
+                        end_reached: start + len == self.string.len(),
                     };
                 }
 
@@ -132,10 +132,30 @@ impl MatchedString {
     pub fn reset(&mut self) {
         self.state = MatchingState::default();
     }
+
+    pub fn is_pending(&self) -> bool {
+        matches!(self.state, MatchingState::Pending)
+    }
+
+    pub fn is_end_reached(&self) -> bool {
+        matches!(
+            self.state,
+            MatchingState::Found {
+                end_reached: true,
+                ..
+            }
+        )
+    }
 }
 
 fn case_insensitive_equal(left: char, right: char) -> bool {
     left.to_lowercase().eq(right.to_lowercase())
+}
+
+pub enum MatchingPart {
+    String,
+    Anchor,
+    Match,
 }
 
 pub struct MatchingParts<'a> {
@@ -183,7 +203,7 @@ impl<'a> Iterator for MatchingParts<'a> {
                     None
                 }
             }
-            MatchingState::Found { start, len } => {
+            MatchingState::Found { start, len, .. } => {
                 let start = *start;
                 let end = start.saturating_add(*len).min(self.string.len());
 

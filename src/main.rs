@@ -201,7 +201,7 @@ impl LeapState {
         let mut last_matched_location: Option<LeapLocation> = None;
 
         for (index, target) in self.targets.iter_mut().enumerate() {
-            if !target.being_matched.current {
+            if !*target.being_matched {
                 continue;
             }
 
@@ -210,7 +210,7 @@ impl LeapState {
                 first_matched_index = first_matched_index.or(Some(index));
                 last_matched_location = Some(target.location.clone());
             } else {
-                target.being_matched.current = false;
+                *target.being_matched = false;
             }
         }
 
@@ -251,7 +251,6 @@ impl LeapState {
             selection_index = dir.advance_index(selection_index, self.targets.len());
             self.targets[selection_index]
                 .being_matched
-                .current
                 .then_some(selection_index)
         });
         self.manual_selection = matched_index.or(self.manual_selection);

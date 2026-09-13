@@ -1,3 +1,5 @@
+use std::ops::{Deref, DerefMut};
+
 use zellij_tile::{
     prelude::{PaneId, PaneInfo},
     shim::hide_floating_panes,
@@ -18,8 +20,12 @@ pub fn pane_id_from_pane(pane_info: &PaneInfo) -> PaneId {
     }
 }
 
+pub fn hide_floating_panes_in_active_tab() {
+    _ = hide_floating_panes(None);
+}
+
 pub struct Resettable<T> {
-    pub current: T,
+    current: T,
     initial: T,
 }
 
@@ -36,6 +42,16 @@ impl<T: Clone> Resettable<T> {
     }
 }
 
-pub fn hide_floating_panes_in_active_tab() {
-    _ = hide_floating_panes(None);
+impl<T> Deref for Resettable<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.current
+    }
+}
+
+impl<T> DerefMut for Resettable<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.current
+    }
 }

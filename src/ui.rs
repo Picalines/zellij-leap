@@ -84,7 +84,7 @@ pub fn render(state: &LeapState, rows: usize, cols: usize) {
 
         let detail = render_target_detail(target).unwrap_or("");
 
-        if !target.being_matched.current {
+        if !*target.being_matched {
             println!(
                 "{}{}",
                 target.name.str().dimmed().strikethrough(),

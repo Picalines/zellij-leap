@@ -315,7 +315,7 @@ impl LeapState {
     ) -> Vec<LeapTarget> {
         tabs.map(|tab| LeapTarget {
             name: MatchedString::new(tab.name.clone()),
-            being_matched: Resettable::new(!tab.active || match_active),
+            being_matched: (!tab.active || match_active).into(),
             current: tab.active,
             location: LeapLocation::Tab {
                 tab_index: TabIndex(tab.position),
@@ -357,7 +357,7 @@ impl LeapState {
 
                 Some(LeapTarget {
                     name: MatchedString::new(pane.title.clone()),
-                    being_matched: Resettable::new(being_matched),
+                    being_matched: being_matched.into(),
                     current: false,
                     location: LeapLocation::Pane {
                         pane_id: pane_id_from_pane(pane),
@@ -396,7 +396,7 @@ impl LeapState {
         session_targets
             .map(|session| LeapTarget {
                 name: MatchedString::new(session.name.0.clone()),
-                being_matched: Resettable::new(!session.is_current || match_current),
+                being_matched: (!session.is_current || match_current).into(),
                 current: session.is_current,
                 location: LeapLocation::Session {
                     session_name: session.name,

@@ -30,15 +30,17 @@ pub struct Resettable<T> {
 }
 
 impl<T: Clone> Resettable<T> {
-    pub fn new(initial_value: T) -> Self {
-        Self {
-            initial: initial_value.clone(),
-            current: initial_value,
-        }
-    }
-
     pub fn reset(&mut self) {
         self.current = self.initial.clone();
+    }
+}
+
+impl<T: Clone> From<T> for Resettable<T> {
+    fn from(value: T) -> Self {
+        Self {
+            current: value.clone(),
+            initial: value,
+        }
     }
 }
 

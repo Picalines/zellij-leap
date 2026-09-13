@@ -1,6 +1,25 @@
 use crate::{config::*, matching::*, utils::*};
 use zellij_tile::prelude::*;
 
+#[derive(Default)]
+pub struct LeapState {
+    pub config: LeapConfig,
+    pub targets: Vec<LeapTarget>,
+    pub manual_selection: Option<usize>,
+    pub last_panes: Option<PaneManifest>,
+    pub last_tabs: Option<Vec<TabInfo>>,
+    pub last_sessions: Option<SessionListSnapshot>,
+    pub is_pane_focused: bool,
+    pub error: Option<String>,
+}
+
+pub struct LeapTarget {
+    pub name: MatchedString,
+    pub being_matched: Resettable<bool>,
+    pub current: bool,
+    pub location: LeapLocation,
+}
+
 #[derive(Clone)]
 pub enum LeapLocation {
     Tab {
@@ -31,23 +50,4 @@ impl SequenceDirection {
             Self::Next => index + 1,
         }
     }
-}
-
-pub struct LeapTarget {
-    pub name: MatchedString,
-    pub being_matched: Resettable<bool>,
-    pub current: bool,
-    pub location: LeapLocation,
-}
-
-#[derive(Default)]
-pub struct LeapState {
-    pub config: LeapConfig,
-    pub targets: Vec<LeapTarget>,
-    pub manual_selection: Option<usize>,
-    pub last_panes: Option<PaneManifest>,
-    pub last_tabs: Option<Vec<TabInfo>>,
-    pub last_sessions: Option<SessionListSnapshot>,
-    pub is_pane_focused: bool,
-    pub error: Option<String>,
 }
